@@ -9,10 +9,10 @@ pub const ROLAND: u8 = 0x41;
 pub const CMD_RQ1: u8 = 0x11;
 pub const CMD_DT1: u8 = 0x12;
 
-/// Katana MkI/MkII: device id 00, model id 00 00 00 33.
-/// Gen 3 is not confirmed yet; check it with `katana-control identify` / `monitor`.
-pub const DEFAULT_DEVICE_ID: u8 = 0x00;
-pub const DEFAULT_MODEL_ID: [u8; 4] = [0x00, 0x00, 0x00, 0x33];
+/// Katana Gen 3: device id 10, model id 01 05 07.
+/// MkI/MkII use device 00, model 00 00 00 33.
+pub const DEFAULT_DEVICE_ID: u8 = 0x10;
+pub const DEFAULT_MODEL_ID: [u8; 3] = [0x01, 0x05, 0x07];
 
 #[derive(Clone, Debug)]
 pub struct Target {
@@ -183,14 +183,21 @@ mod tests {
     #[test]
     fn edit_mode_on_matches_known_mk2_message() {
         // F0 41 00 00 00 00 33 12 7F 00 00 01 01 7F F7 (documented by TuxKatana for the MkII)
-        let m = dt1(&Target::default(), [0x7F, 0, 0, 1], &[1]);
+        let mk2 = Target { device_id: 0x00, model_id: vec![0x00, 0x00, 0x00, 0x33] };
+        let m = dt1(&mk2, [0x7F, 0, 0, 1], &[1]);
         assert_eq!(hex(&m), "F0 41 00 00 00 00 33 12 7F 00 00 01 01 7F F7");
+    }
+
+    #[test]
+    fn gen3_edit_mode_on() {
+        let m = dt1(&Target::default(), [0x7F, 0, 0, 1], &[1]);
+        assert_eq!(hex(&m), "F0 41 10 01 05 07 12 7F 00 00 01 01 7F F7");
     }
 
     #[test]
     fn round_trip_dt1() {
         let m = dt1(&Target::default(), [0x60, 0, 0x06, 0x50], &[0x10, 0x20]);
-        match parse(&m, 4) {
+        match parse(&m, 3) {
             Parsed::Dt1 {
                 addr,
                 data,
@@ -208,7 +215,7 @@ mod tests {
     #[test]
     fn rq1_size_is_7bit() {
         let m = rq1(&Target::default(), [0x60, 0, 0, 0], 200);
-        match parse(&m, 4) {
+        match parse(&m, 3) {
             Parsed::Rq1 {
                 size, checksum_ok, ..
             } => {
