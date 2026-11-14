@@ -20,6 +20,7 @@
     "vite": "^8.3.6"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@tauri-apps/api": "^2.12.4"
   }
 }

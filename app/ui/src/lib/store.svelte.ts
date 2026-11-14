@@ -38,7 +38,7 @@ export interface Setlist {
   songs: Song[]
 }
 
-export type View = 'editor' | 'library' | 'setlists' | 'guitars'
+export type View = 'editor' | 'ai' | 'library' | 'setlists' | 'guitars'
 
 interface Change {
   id: string
@@ -207,6 +207,28 @@ class Store {
     }
     this.redoStack = []
     if (!opts.fromAmp) this.send({ [id]: value })
+  }
+
+  /** Set many params at once (AI Studio), sending only what changed in one batch. Each change
+   *  is its own undo step. `name` also renames the tone. */
+  applyParams(target: Values, name?: string) {
+    const t = Date.now()
+    const diff: Values = {}
+    for (const [id, to] of Object.entries(target)) {
+      const from = this.tone.params[id]
+      if (from === to || id === 'com.name') continue
+      this.tone.params[id] = to
+      this.undoStack.push({ id, from, to, at: t - 2000 }) // not merged with a following knob turn
+      diff[id] = to
+    }
+    if (this.undoStack.length > 500) this.undoStack.splice(0, this.undoStack.length - 500)
+    this.redoStack = []
+    if (name && name !== this.tone.name) {
+      this.tone.name = name
+      this.tone.params['com.name'] = ampName(name)
+      diff['com.name'] = this.tone.params['com.name']
+    }
+    if (Object.keys(diff).length) this.send(diff)
   }
 
   private send(values: Values) {
