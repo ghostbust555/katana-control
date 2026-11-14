@@ -21,6 +21,11 @@
   })
   const toneOf = (id: string | null) => store.findTone(id)
   /** "AC/DC" from a default tone's notes ("AC/DC: Gibson SG into ..."), else its category. */
+  /** A default tone's card shows its first few tags after the category, minus ones that repeat its name. */
+  const presetTags = (t: Tone) => {
+    const n = t.name.toLowerCase()
+    return t.tags.slice(1).filter((x) => !n.includes(x.toLowerCase()) && !x.toLowerCase().includes(n)).slice(0, 3)
+  }
   const byline = (t: Tone) => (t.tags[0] === 'Songs' && t.notes.includes(':') ? t.notes.slice(0, t.notes.indexOf(':')) : t.tags[0])
   const ampType = (t: Tone) => format(param('amp.type'), t.params['amp.type'])
   /** Blocks switched on in this tone, for the card's chips. */
@@ -112,7 +117,7 @@
           {/if}
           <span class="chips">
             {#each activeBlocks(t) as b}<span class="chip">{b}</span>{/each}
-            {#if !t.builtin}{#each t.tags as tag}<span class="chip tag">#{tag}</span>{/each}{/if}
+            {#each t.builtin ? presetTags(t) : t.tags as tag}<span class="chip tag">#{tag}</span>{/each}
           </span>
         </button>
       {/each}

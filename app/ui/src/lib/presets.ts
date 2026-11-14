@@ -129,6 +129,72 @@ function exported(name: keyof typeof PLAYER, category: PresetCategory, notes: st
   return build(name, category, notes, [(v) => Object.assign(v, PLAYER[name] as V)], false)
 }
 
+/** Extra tags per preset: the song, band or artist and guitarist for tones based on a real
+ *  recording (so search finds "SRV" or "Metallica"), then style. The category is always first. */
+const TAGS: Record<string, string[]> = {
+  "Sweet Child O' Mine": ["Sweet Child O' Mine", "Guns N' Roses", 'Slash', 'Hard rock', 'Lead'],
+  'Back in Black': ['Back in Black', 'AC/DC', 'Angus Young', 'Malcolm Young', 'Hard rock', 'Rhythm'],
+  'Smoke on the Water': ['Smoke on the Water', 'Deep Purple', 'Ritchie Blackmore', 'Classic rock', 'Riff'],
+  'Teen Spirit verse': ['Smells Like Teen Spirit', 'Nirvana', 'Kurt Cobain', 'Grunge', 'Clean', 'Chorus'],
+  'Teen Spirit chorus': ['Smells Like Teen Spirit', 'Nirvana', 'Kurt Cobain', 'Grunge', 'Distortion'],
+  'Comfortably Numb solo': ['Comfortably Numb', 'Pink Floyd', 'David Gilmour', 'Classic rock', 'Lead', 'Fuzz'],
+  'Streets Have No Name': ['Where the Streets Have No Name', 'U2', 'The Edge', 'Delay', 'Chime'],
+  'Master of Puppets': ['Master of Puppets', 'Metallica', 'James Hetfield', 'Thrash', 'Rhythm'],
+  Paranoid: ['Paranoid', 'Black Sabbath', 'Tony Iommi', 'Heavy metal', 'Riff'],
+  'Purple Haze': ['Purple Haze', 'Jimi Hendrix', 'Psychedelic', 'Fuzz', 'Octave'],
+  'Little Wing': ['Little Wing', 'Jimi Hendrix', 'Clean', 'Rotary'],
+  'Pride and Joy': ['Pride and Joy', 'Stevie Ray Vaughan', 'SRV', 'Texas blues', 'Blues'],
+  'Hotel California solo': ['Hotel California', 'Eagles', 'Don Felder', 'Joe Walsh', 'Classic rock', 'Lead'],
+  'Sultans of Swing': ['Sultans of Swing', 'Dire Straits', 'Mark Knopfler', 'Clean', 'Fingerstyle'],
+  'Money for Nothing': ['Money for Nothing', 'Dire Straits', 'Mark Knopfler', 'Classic rock', 'Wah'],
+  'Every Breath You Take': ['Every Breath You Take', 'The Police', 'Andy Summers', 'Clean', 'Chorus'],
+  'Under the Bridge': ['Under the Bridge', 'Red Hot Chili Peppers', 'RHCP', 'John Frusciante', 'Clean'],
+  'Seven Nation Army': ['Seven Nation Army', 'The White Stripes', 'Jack White', 'Garage rock', 'Fuzz', 'Octave'],
+  Eruption: ['Eruption', 'Van Halen', 'Eddie Van Halen', 'EVH', 'Brown sound', 'Lead', 'Phaser'],
+  'Johnny B. Goode': ['Johnny B. Goode', 'Chuck Berry', 'Rock and roll', 'Slapback'],
+  Wonderwall: ['Wonderwall', 'Oasis', 'Noel Gallagher', 'Britpop', 'Acoustic'],
+  'Black Hole Sun': ['Black Hole Sun', 'Soundgarden', 'Kim Thayil', 'Chris Cornell', 'Grunge', 'Rotary'],
+  'Crazy Train': ['Crazy Train', 'Ozzy Osbourne', 'Randy Rhoads', 'Heavy metal', 'Riff'],
+  Satisfaction: ['(I Can\'t Get No) Satisfaction', 'The Rolling Stones', 'Keith Richards', 'Fuzz', 'Riff'],
+  'Sunshine of Your Love': ['Sunshine of Your Love', 'Cream', 'Eric Clapton', 'Woman tone', 'Classic rock', 'Riff'],
+  'Killing in the Name': ['Killing in the Name', 'Rage Against the Machine', 'RATM', 'Tom Morello', 'Drop D', 'Whammy'],
+  'AWD Black Album': ['Black Album', 'Metallica', 'James Hetfield', 'Heavy metal', 'Rhythm'],
+  'Synyster Gates Lead': ['Avenged Sevenfold', 'A7X', 'Synyster Gates', 'Metal', 'Lead'],
+  'Message in a Bottle': ['Message in a Bottle', 'The Police', 'Andy Summers', 'Clean', 'Chorus'],
+  One: ['Clean', 'Chorus'],
+  Everlong: ['Everlong', 'Foo Fighters', 'Dave Grohl', 'Alternative rock', 'Drop D', 'Rhythm'],
+  'Clean Guitar': ['Clean'],
+  Acoustic: ['Acoustic'],
+  'Glassy Clean': ['Clean', 'Chorus', 'Arpeggios'],
+  'Surf Reverb': ['Surf', 'Dick Dale', 'The Ventures', 'Reverb'],
+  'Chicago Blues': ['Blues', 'Edge of breakup'],
+  'Slow Blues Lead': ['Blues', 'Lead'],
+  '87': ['80s', 'Hard rock'],
+  'Classic Rock Lead': ['Classic rock', 'Lead'],
+  '80s Hair Metal Lead': ['80s', 'Hair metal', 'Lead', 'Chorus'],
+  'AWD Hi Gain': ['High gain', 'Rhythm'],
+  'Zacky Vengeance': ['Avenged Sevenfold', 'A7X', 'Zacky Vengeance', 'Metal', 'Rhythm'],
+  BFMV: ['Bullet for My Valentine', 'BFMV', 'Metalcore', 'Rhythm'],
+  'Modern Metal Rhythm': ['High gain', 'Djent', 'Rhythm'],
+  'Swedish Chainsaw': ['Entombed', 'Death metal', 'HM-2'],
+  'Doom Fuzz': ['Sleep', 'Electric Wizard', 'Doom', 'Stoner', 'Fuzz'],
+  'Pop Punk': ['Green Day', 'Blink-182', 'Punk', 'Rhythm'],
+  '90s Grunge': ['Smashing Pumpkins', 'Mudhoney', 'Grunge', 'Fuzz'],
+  'Shoegaze Wall': ['My Bloody Valentine', 'Shoegaze', 'Fuzz', 'Reverb'],
+  'Funk Rhythm': ['Nile Rodgers', 'James Brown', 'Funk', 'Rhythm'],
+  'Auto-Wah Funk': ['Funk', 'Envelope filter'],
+  'Reggae Skank': ['Reggae', 'Rhythm'],
+  "Chicken Pickin'": ['Country', 'Telecaster', 'Slapback'],
+  'Jazz Box': ['Jazz', 'Clean'],
+  'Ambient Swells': ['Ambient', 'Swells', 'Delay'],
+  'Post-Rock Shimmer': ['Explosions in the Sky', 'Post-rock', 'Ambient', 'Delay'],
+  'Synth Lead': ['Synth'],
+  'Robot Ring Mod': ['Ring mod', 'Experimental'],
+  'Talking Guitar': ['Talk box', 'Experimental'],
+  'Octave Bass': ['Octave', 'Bass lines'],
+  'Reverse Dream': ['Reverse delay', 'Ambient'],
+}
+
 function build(name: string, category: PresetCategory, notes: string, blocks: ((v: V) => void)[], gateFloor: boolean): Tone {
   const v = presetBase()
   for (const b of blocks) b(v)
@@ -137,7 +203,7 @@ function build(name: string, category: PresetCategory, notes: string, blocks: ((
   put(v, 'com.name', name.replace(/[^\x20-\x7d]/g, ' ').slice(0, 16).padEnd(16, ' '))
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   return {
-    id: `preset:${slug}`, schema: 1, name, author: 'Katana Studio', tags: [category], notes,
+    id: `preset:${slug}`, schema: 1, name, author: 'Katana Studio', tags: [category, ...(TAGS[name] ?? []).filter((t) => t !== category)], notes,
     created: '2026-11-14T00:00:00.000Z', modified: '2026-11-14T00:00:00.000Z',
     device: { model: 'KATANA Gen3' }, params: v, builtin: true,
   }
@@ -401,4 +467,5 @@ export const presets: Tone[] = [
     delay('REVERSE', 500, 30, 60), reverb('HALL', 50, 40)),
 ]
 
+for (const t of presets) if (!(t.name in TAGS)) problems.push(`no tags for ${t.name}`)
 if (problems.length) console.warn('preset problems:\n' + problems.join('\n'))
