@@ -1,14 +1,11 @@
-mod capture;
 mod log;
-mod roland;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
-use roland::{Parsed, Target, hex, parse, parse_addr, parse_hex};
+use katana_core::roland::{self, Parsed, Target, hex, parse, parse_addr, parse_hex};
+use katana_core::{amp, capture};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 #[derive(Parser)]
@@ -118,57 +115,24 @@ fn describe(msg: &[u8], model_len: usize) -> String {
     }
 }
 
-fn find_port<T: midir::MidiIO>(io: &T, needle: &str) -> Result<T::Port> {
-    let needle = needle.to_lowercase();
-    io.ports()
-        .into_iter()
-        .find(|p| {
-            io.port_name(p)
-                .map(|n| n.to_lowercase().contains(&needle))
-                .unwrap_or(false)
-        })
-        .ok_or_else(|| anyhow!("no MIDI port matching {needle:?}; run `ports` to list them"))
-}
-
 struct Amp {
-    out: MidiOutputConnection,
-    _in: MidiInputConnection<()>,
-    rx: mpsc::Receiver<Vec<u8>>,
+    conn: amp::Connection,
 }
 
 impl Amp {
     fn open(port: &str) -> Result<Amp> {
-        let mut input = MidiInput::new("katana-control-in")?;
-        input.ignore(Ignore::None); // keep SysEx
-        let in_port = find_port(&input, port)?;
-        let (tx, rx) = mpsc::channel();
-        let _in = input
-            .connect(
-                &in_port,
-                "katana-in",
-                move |_, msg, _| {
-                    let _ = tx.send(msg.to_vec());
-                },
-                (),
-            )
-            .map_err(|e| anyhow!("opening MIDI input: {e} (is Tone Studio still running?)"))?;
-        let output = MidiOutput::new("katana-control-out")?;
-        let out_port = find_port(&output, port)?;
-        let out = output
-            .connect(&out_port, "katana-out")
-            .map_err(|e| anyhow!("opening MIDI output: {e} (is Tone Studio still running?)"))?;
-        Ok(Amp { out, _in, rx })
+        Ok(Amp { conn: amp::Connection::open(port)? })
     }
 
     fn send(&mut self, msg: &[u8]) -> Result<()> {
         out!(">> {}", hex(msg));
-        self.out.send(msg).context("MIDI send")
+        self.conn.send(msg)
     }
 
     /// Print everything received until `quiet` passes with no new message.
     fn drain(&self, quiet: Duration, model_len: usize) -> Vec<Vec<u8>> {
         let mut got = Vec::new();
-        while let Ok(msg) = self.rx.recv_timeout(quiet) {
+        while let Some(msg) = self.conn.recv_timeout(quiet) {
             out!("<< {}\n   {}", hex(&msg), describe(&msg, model_len));
             got.push(msg);
         }
@@ -211,15 +175,14 @@ fn run(cli: &Cli) -> Result<()> {
     let ml = t.model_id.len();
     match &cli.cmd {
         Cmd::Ports => {
-            let i = MidiInput::new("katana-control")?;
-            let o = MidiOutput::new("katana-control")?;
+            let (ins, outs) = amp::port_names()?;
             out!("inputs:");
-            for p in i.ports() {
-                out!("  {}", i.port_name(&p)?);
+            for n in ins {
+                out!("  {n}");
             }
             out!("outputs:");
-            for p in o.ports() {
-                out!("  {}", o.port_name(&p)?);
+            for n in outs {
+                out!("  {n}");
             }
         }
         Cmd::Identify => {
@@ -239,7 +202,7 @@ fn run(cli: &Cli) -> Result<()> {
             }
             out!("listening; Ctrl+C to stop");
             let start = Instant::now();
-            for msg in amp.rx.iter() {
+            for msg in amp.conn.rx.iter() {
                 out!(
                     "[{:8.3}] << {}\n           {}",
                     start.elapsed().as_secs_f64(),

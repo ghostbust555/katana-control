@@ -3,3 +3,4 @@ captures/*
 !captures/.gitkeep
 share/.env
 dist/
+app/src-tauri/gen/
