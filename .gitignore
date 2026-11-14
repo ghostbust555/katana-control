@@ -1,3 +1,5 @@
 /target
 captures/*
 !captures/.gitkeep
+share/.env
+dist/
