@@ -3,7 +3,7 @@
 //! Layout:  F0 41 <dev> <model id...> <cmd> <addr x4> <data | size x4> <checksum> F7
 //! The checksum covers address + data and makes their 7-bit sum come out to 0 mod 128.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 pub const ROLAND: u8 = 0x41;
 pub const CMD_RQ1: u8 = 0x11;
@@ -22,7 +22,10 @@ pub struct Target {
 
 impl Default for Target {
     fn default() -> Self {
-        Target { device_id: DEFAULT_DEVICE_ID, model_id: DEFAULT_MODEL_ID.to_vec() }
+        Target {
+            device_id: DEFAULT_DEVICE_ID,
+            model_id: DEFAULT_MODEL_ID.to_vec(),
+        }
     }
 }
 
@@ -58,18 +61,42 @@ pub const IDENTITY_REQUEST: [u8; 6] = [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7];
 
 /// A value as four 7-bit bytes, used for RQ1 sizes and address arithmetic.
 pub fn to_7bit4(v: u32) -> [u8; 4] {
-    [((v >> 21) & 0x7F) as u8, ((v >> 14) & 0x7F) as u8, ((v >> 7) & 0x7F) as u8, (v & 0x7F) as u8]
+    [
+        ((v >> 21) & 0x7F) as u8,
+        ((v >> 14) & 0x7F) as u8,
+        ((v >> 7) & 0x7F) as u8,
+        (v & 0x7F) as u8,
+    ]
 }
 
 pub fn from_7bit(bytes: &[u8]) -> u32 {
-    bytes.iter().fold(0, |acc, &b| (acc << 7) | (b & 0x7F) as u32)
+    bytes
+        .iter()
+        .fold(0, |acc, &b| (acc << 7) | (b & 0x7F) as u32)
 }
 
 #[derive(Debug)]
 pub enum Parsed {
-    Dt1 { device_id: u8, model_id: Vec<u8>, addr: [u8; 4], data: Vec<u8>, checksum_ok: bool },
-    Rq1 { device_id: u8, model_id: Vec<u8>, addr: [u8; 4], size: u32, checksum_ok: bool },
-    IdentityReply { manufacturer: u8, family: [u8; 2], member: [u8; 2], version: [u8; 4] },
+    Dt1 {
+        device_id: u8,
+        model_id: Vec<u8>,
+        addr: [u8; 4],
+        data: Vec<u8>,
+        checksum_ok: bool,
+    },
+    Rq1 {
+        device_id: u8,
+        model_id: Vec<u8>,
+        addr: [u8; 4],
+        size: u32,
+        checksum_ok: bool,
+    },
+    IdentityReply {
+        manufacturer: u8,
+        family: [u8; 2],
+        member: [u8; 2],
+        version: [u8; 4],
+    },
     Other,
 }
 
@@ -84,7 +111,11 @@ pub fn parse(msg: &[u8], model_len: usize) -> Parsed {
         };
     }
     let head = 3 + model_len; // F0 41 dev model...
-    if msg.len() < head + 1 + 4 + 2 || msg[0] != 0xF0 || msg[1] != ROLAND || *msg.last().unwrap() != 0xF7 {
+    if msg.len() < head + 1 + 4 + 2
+        || msg[0] != 0xF0
+        || msg[1] != ROLAND
+        || *msg.last().unwrap() != 0xF7
+    {
         return Parsed::Other;
     }
     let device_id = msg[2];
@@ -94,16 +125,30 @@ pub fn parse(msg: &[u8], model_len: usize) -> Parsed {
     let checksum_ok = checksum(body) == msg[msg.len() - 2];
     let addr = [body[0], body[1], body[2], body[3]];
     match cmd {
-        CMD_DT1 => Parsed::Dt1 { device_id, model_id, addr, data: body[4..].to_vec(), checksum_ok },
-        CMD_RQ1 if body.len() == 8 => {
-            Parsed::Rq1 { device_id, model_id, addr, size: from_7bit(&body[4..8]), checksum_ok }
-        }
+        CMD_DT1 => Parsed::Dt1 {
+            device_id,
+            model_id,
+            addr,
+            data: body[4..].to_vec(),
+            checksum_ok,
+        },
+        CMD_RQ1 if body.len() == 8 => Parsed::Rq1 {
+            device_id,
+            model_id,
+            addr,
+            size: from_7bit(&body[4..8]),
+            checksum_ok,
+        },
         _ => Parsed::Other,
     }
 }
 
 pub fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")
+    bytes
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Parse "F0 41 00", "f04100", or "0xF0,0x41" into bytes.
@@ -117,7 +162,10 @@ pub fn parse_hex(s: &str) -> Result<Vec<u8>> {
     if !clean.len().is_multiple_of(2) {
         bail!("odd number of hex digits in {s:?}");
     }
-    (0..clean.len()).step_by(2).map(|i| Ok(u8::from_str_radix(&clean[i..i + 2], 16)?)).collect()
+    (0..clean.len())
+        .step_by(2)
+        .map(|i| Ok(u8::from_str_radix(&clean[i..i + 2], 16)?))
+        .collect()
 }
 
 pub fn parse_addr(s: &str) -> Result<[u8; 4]> {
@@ -143,7 +191,12 @@ mod tests {
     fn round_trip_dt1() {
         let m = dt1(&Target::default(), [0x60, 0, 0x06, 0x50], &[0x10, 0x20]);
         match parse(&m, 4) {
-            Parsed::Dt1 { addr, data, checksum_ok, .. } => {
+            Parsed::Dt1 {
+                addr,
+                data,
+                checksum_ok,
+                ..
+            } => {
                 assert_eq!(addr, [0x60, 0, 0x06, 0x50]);
                 assert_eq!(data, vec![0x10, 0x20]);
                 assert!(checksum_ok);
@@ -156,7 +209,9 @@ mod tests {
     fn rq1_size_is_7bit() {
         let m = rq1(&Target::default(), [0x60, 0, 0, 0], 200);
         match parse(&m, 4) {
-            Parsed::Rq1 { size, checksum_ok, .. } => {
+            Parsed::Rq1 {
+                size, checksum_ok, ..
+            } => {
                 assert_eq!(size, 200);
                 assert!(checksum_ok);
             }

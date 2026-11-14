@@ -8,7 +8,7 @@
 //! USB-MIDI traffic is a stream of 4-byte event packets: [cable<<4 | CIN, b0, b1, b2].
 //! SysEx is split across packets with CIN 4 (start/continue) and CIN 5/6/7 (end with 1/2/3 bytes).
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use pcap_file::pcap::PcapReader;
 use pcap_file::pcapng::{Block, PcapNgReader};
 use std::collections::HashMap;
@@ -53,8 +53,16 @@ fn usb_payload(linktype: u32, pkt: &[u8]) -> Option<UsbPayload<'_>> {
             if transfer != 1 && transfer != 3 {
                 return None;
             }
-            let dir = if endpoint & 0x80 != 0 { Dir::FromAmp } else { Dir::ToAmp };
-            Some(UsbPayload { dir, device, data: pkt.get(hdr_len..)? })
+            let dir = if endpoint & 0x80 != 0 {
+                Dir::FromAmp
+            } else {
+                Dir::ToAmp
+            };
+            Some(UsbPayload {
+                dir,
+                device,
+                data: pkt.get(hdr_len..)?,
+            })
         }
         220 | 189 => {
             let hdr_len = if linktype == 220 { 64 } else { 48 };
@@ -65,8 +73,16 @@ fn usb_payload(linktype: u32, pkt: &[u8]) -> Option<UsbPayload<'_>> {
             if xfer_type != 1 && xfer_type != 3 {
                 return None;
             }
-            let dir = if pkt[10] & 0x80 != 0 { Dir::FromAmp } else { Dir::ToAmp };
-            Some(UsbPayload { dir, device: pkt[11] as u16, data: &pkt[hdr_len..] })
+            let dir = if pkt[10] & 0x80 != 0 {
+                Dir::FromAmp
+            } else {
+                Dir::ToAmp
+            };
+            Some(UsbPayload {
+                dir,
+                device: pkt[11] as u16,
+                data: &pkt[hdr_len..],
+            })
         }
         _ => None,
     }
@@ -138,21 +154,29 @@ pub fn read_midi_events(path: &Path) -> Result<Vec<MidiEvent>> {
 
     let linktypes: std::collections::BTreeSet<u32> = packets.iter().map(|(lt, _)| *lt).collect();
     if !linktypes.iter().any(|lt| matches!(lt, 249 | 220 | 189)) {
-        bail!("no USB packets in capture (link types {linktypes:?}); capture with USBPcap or usbmon");
+        bail!(
+            "no USB packets in capture (link types {linktypes:?}); capture with USBPcap or usbmon"
+        );
     }
 
     let mut rs = Reassembler::default();
     let mut raw = Vec::new();
     for (lt, pkt) in &packets {
         if let Some(p) = usb_payload(*lt, pkt)
-            && p.data.len() % 4 == 0 {
-                rs.feed(p.dir, p.device, p.data, &mut raw);
-            }
+            && p.data.len() % 4 == 0
+        {
+            rs.feed(p.dir, p.device, p.data, &mut raw);
+        }
     }
     Ok(raw
         .into_iter()
         .enumerate()
-        .map(|(index, (dir, device, bytes))| MidiEvent { index, dir, device, bytes })
+        .map(|(index, (dir, device, bytes))| MidiEvent {
+            index,
+            dir,
+            device,
+            bytes,
+        })
         .collect())
 }
 
@@ -164,8 +188,8 @@ mod tests {
     fn reassembles_sysex_across_packets() {
         // F0 41 00 00 00 00 33 12 7F 00 00 01 01 7F F7 as USB-MIDI packets
         let usb = [
-            0x04, 0xF0, 0x41, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x33, 0x12, 0x7F, 0x04, 0x00, 0x00, 0x01,
-            0x07, 0x01, 0x7F, 0xF7, 0x0C, 0xC5, 0x00, 0x00,
+            0x04, 0xF0, 0x41, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x33, 0x12, 0x7F, 0x04, 0x00,
+            0x00, 0x01, 0x07, 0x01, 0x7F, 0xF7, 0x0C, 0xC5, 0x00, 0x00,
         ];
         let mut out = Vec::new();
         Reassembler::default().feed(Dir::ToAmp, 1, &usb, &mut out);

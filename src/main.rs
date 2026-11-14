@@ -1,10 +1,11 @@
 mod capture;
+mod log;
 mod roland;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
 use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
-use roland::{hex, parse, parse_addr, parse_hex, Parsed, Target};
+use roland::{Parsed, Target, hex, parse, parse_addr, parse_hex};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -22,6 +23,9 @@ struct Cli {
     /// Roland model id bytes (4 on MkI/MkII; Gen 3 to be confirmed)
     #[arg(long, global = true, default_value = "00 00 00 33")]
     model_id: String,
+    /// Don't write a log file to logs\ next to the exe
+    #[arg(long, global = true)]
+    no_log: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -58,26 +62,46 @@ fn target(cli: &Cli) -> Result<Target> {
     if dev.len() != 1 {
         bail!("--device-id must be one byte");
     }
-    Ok(Target { device_id: dev[0], model_id: parse_hex(&cli.model_id)? })
+    Ok(Target {
+        device_id: dev[0],
+        model_id: parse_hex(&cli.model_id)?,
+    })
 }
 
 fn describe(msg: &[u8], model_len: usize) -> String {
     match parse(msg, model_len) {
-        Parsed::Dt1 { device_id, addr, data, checksum_ok, model_id } => format!(
+        Parsed::Dt1 {
+            device_id,
+            addr,
+            data,
+            checksum_ok,
+            model_id,
+        } => format!(
             "DT1 dev {device_id:02X} model[{}] addr {}  data [{}]{}",
             hex(&model_id),
             hex(&addr),
             hex(&data),
             if checksum_ok { "" } else { "  (BAD CHECKSUM)" }
         ),
-        Parsed::Rq1 { device_id, addr, size, checksum_ok, model_id } => format!(
+        Parsed::Rq1 {
+            device_id,
+            addr,
+            size,
+            checksum_ok,
+            model_id,
+        } => format!(
             "RQ1 dev {device_id:02X} model[{}] addr {}  size {}{}",
             hex(&model_id),
             hex(&addr),
             size,
             if checksum_ok { "" } else { "  (BAD CHECKSUM)" }
         ),
-        Parsed::IdentityReply { manufacturer, family, member, version } => format!(
+        Parsed::IdentityReply {
+            manufacturer,
+            family,
+            member,
+            version,
+        } => format!(
             "IDENTITY manufacturer {:02X} family {} member {} version {}",
             manufacturer,
             hex(&family),
@@ -86,7 +110,9 @@ fn describe(msg: &[u8], model_len: usize) -> String {
         ),
         Parsed::Other => match msg.first() {
             Some(s) if s & 0xF0 == 0xC0 => format!("PC  ch{} program {}", (s & 0x0F) + 1, msg[1]),
-            Some(s) if s & 0xF0 == 0xB0 => format!("CC  ch{} cc {} = {}", (s & 0x0F) + 1, msg[1], msg[2]),
+            Some(s) if s & 0xF0 == 0xB0 => {
+                format!("CC  ch{} cc {} = {}", (s & 0x0F) + 1, msg[1], msg[2])
+            }
             _ => format!("RAW {}", hex(msg)),
         },
     }
@@ -96,7 +122,11 @@ fn find_port<T: midir::MidiIO>(io: &T, needle: &str) -> Result<T::Port> {
     let needle = needle.to_lowercase();
     io.ports()
         .into_iter()
-        .find(|p| io.port_name(p).map(|n| n.to_lowercase().contains(&needle)).unwrap_or(false))
+        .find(|p| {
+            io.port_name(p)
+                .map(|n| n.to_lowercase().contains(&needle))
+                .unwrap_or(false)
+        })
         .ok_or_else(|| anyhow!("no MIDI port matching {needle:?}; run `ports` to list them"))
 }
 
@@ -113,9 +143,14 @@ impl Amp {
         let in_port = find_port(&input, port)?;
         let (tx, rx) = mpsc::channel();
         let _in = input
-            .connect(&in_port, "katana-in", move |_, msg, _| {
-                let _ = tx.send(msg.to_vec());
-            }, ())
+            .connect(
+                &in_port,
+                "katana-in",
+                move |_, msg, _| {
+                    let _ = tx.send(msg.to_vec());
+                },
+                (),
+            )
             .map_err(|e| anyhow!("opening MIDI input: {e} (is Tone Studio still running?)"))?;
         let output = MidiOutput::new("katana-control-out")?;
         let out_port = find_port(&output, port)?;
@@ -126,7 +161,7 @@ impl Amp {
     }
 
     fn send(&mut self, msg: &[u8]) -> Result<()> {
-        println!(">> {}", hex(msg));
+        out!(">> {}", hex(msg));
         self.out.send(msg).context("MIDI send")
     }
 
@@ -134,35 +169,64 @@ impl Amp {
     fn drain(&self, quiet: Duration, model_len: usize) -> Vec<Vec<u8>> {
         let mut got = Vec::new();
         while let Ok(msg) = self.rx.recv_timeout(quiet) {
-            println!("<< {}\n   {}", hex(&msg), describe(&msg, model_len));
+            out!("<< {}\n   {}", hex(&msg), describe(&msg, model_len));
             got.push(msg);
         }
         got
     }
 }
 
-fn main() -> Result<()> {
+impl Cmd {
+    fn name(&self) -> &'static str {
+        match self {
+            Cmd::Ports => "ports",
+            Cmd::Identify => "identify",
+            Cmd::Monitor { .. } => "monitor",
+            Cmd::Send { .. } => "send",
+            Cmd::Read { .. } => "read",
+            Cmd::Write { .. } => "write",
+            Cmd::Decode { .. } => "decode",
+        }
+    }
+}
+
+fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
-    let t = target(&cli)?;
+    if !cli.no_log
+        && let Some(path) = log::init(cli.cmd.name())
+    {
+        eprintln!("logging to {}", path.display());
+    }
+    match run(&cli) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            err!("error: {e:#}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+fn run(cli: &Cli) -> Result<()> {
+    let t = target(cli)?;
     let ml = t.model_id.len();
     match &cli.cmd {
         Cmd::Ports => {
             let i = MidiInput::new("katana-control")?;
             let o = MidiOutput::new("katana-control")?;
-            println!("inputs:");
+            out!("inputs:");
             for p in i.ports() {
-                println!("  {}", i.port_name(&p)?);
+                out!("  {}", i.port_name(&p)?);
             }
-            println!("outputs:");
+            out!("outputs:");
             for p in o.ports() {
-                println!("  {}", o.port_name(&p)?);
+                out!("  {}", o.port_name(&p)?);
             }
         }
         Cmd::Identify => {
             let mut amp = Amp::open(&cli.port)?;
             amp.send(&roland::IDENTITY_REQUEST)?;
             if amp.drain(Duration::from_millis(1000), ml).is_empty() {
-                println!("no reply");
+                out!("no reply");
             }
         }
         Cmd::Monitor { edit_mode } => {
@@ -170,10 +234,10 @@ fn main() -> Result<()> {
             if *edit_mode {
                 amp.send(&roland::dt1(&t, [0x7F, 0, 0, 1], &[1]))?;
             }
-            println!("listening; Ctrl+C to stop");
+            out!("listening; Ctrl+C to stop");
             let start = Instant::now();
             for msg in amp.rx.iter() {
-                println!(
+                out!(
                     "[{:8.3}] << {}\n           {}",
                     start.elapsed().as_secs_f64(),
                     hex(&msg),
@@ -190,7 +254,7 @@ fn main() -> Result<()> {
             let mut amp = Amp::open(&cli.port)?;
             amp.send(&roland::rq1(&t, parse_addr(addr)?, *size))?;
             if amp.drain(Duration::from_millis(1000), ml).is_empty() {
-                println!("no reply (wrong model id, or the address is not readable)");
+                out!("no reply (wrong model id, or the address is not readable)");
             }
         }
         Cmd::Write { addr, data } => {
@@ -210,14 +274,14 @@ fn main() -> Result<()> {
                         entry.1 = data;
                     }
                 }
-                println!("{:<12} {:>5}  last data", "address", "count");
+                out!("{:<12} {:>5}  last data", "address", "count");
                 for (addr, (n, data)) in seen {
                     let shown = if data.len() > 24 {
                         format!("{} ... ({} bytes)", hex(&data[..24]), data.len())
                     } else {
                         hex(&data)
                     };
-                    println!("{:<12} {:>5}  {}", hex(&addr), n, shown);
+                    out!("{:<12} {:>5}  {}", hex(&addr), n, shown);
                 }
             } else {
                 for e in &events {
@@ -225,10 +289,16 @@ fn main() -> Result<()> {
                         capture::Dir::ToAmp => "PC ->amp",
                         capture::Dir::FromAmp => "amp-> PC",
                     };
-                    println!("#{:<5} dev{:<3} {}  {}", e.index, e.device, arrow, describe(&e.bytes, ml));
+                    out!(
+                        "#{:<5} dev{:<3} {}  {}",
+                        e.index,
+                        e.device,
+                        arrow,
+                        describe(&e.bytes, ml)
+                    );
                 }
             }
-            eprintln!("{} MIDI messages", events.len());
+            err!("{} MIDI messages", events.len());
         }
     }
     Ok(())
