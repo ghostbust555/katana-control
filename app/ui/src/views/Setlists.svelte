@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { presets } from '../lib/presets'
   import Choices from '../components/Choices.svelte'
   import Popover from '../components/Popover.svelte'
   import { pressAt, type Point } from '../lib/press'
@@ -14,8 +15,8 @@
   let songMenu = $state<{ i: number; at: Point } | null>(null)
 
   const liveIndex = $derived(list && store.liveSong?.setlistId === list.id ? list.songs.findIndex((s) => s.id === store.liveSong!.songId) : -1)
-  const pickTones = $derived([...store.tones].sort((a, b) => a.name.localeCompare(b.name)))
-  const toneName = (id: string | null | undefined) => (id ? (store.tones.find((t) => t.id === id)?.name ?? 'Deleted tone') : null)
+  const pickTones = $derived([...store.tones].sort((a, b) => a.name.localeCompare(b.name)).concat(presets))
+  const toneName = (id: string | null | undefined) => (id ? (store.findTone(id)?.name ?? 'Deleted tone') : null)
   const canPlay = $derived(store.amp.connected && !store.amp.busy)
 
   function add() {
@@ -92,7 +93,6 @@
           </div>
         {/each}
         <button class="addsong" onclick={() => store.addSong(list)}>+ Add song</button>
-        {#if !store.tones.length}<p class="dim">Save some tones in the Editor first; songs pick from them.</p>{/if}
       </div>
     {:else}
       <div class="row head">

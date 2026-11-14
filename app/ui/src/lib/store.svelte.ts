@@ -1,5 +1,6 @@
 // App state: current tone + undo, tone library, guitars, channel assignments, amp connection.
 import { backend, log, type Values } from './backend'
+import { presets } from './presets'
 import { byId, channels, defaults, param, writable, type Value } from './schema'
 
 export interface Tone {
@@ -13,6 +14,8 @@ export interface Tone {
   modified: string
   device: { model: 'KATANA Gen3' }
   params: Values
+  /** A default tone that ships with the app: read-only, open or copy it to change it. */
+  builtin?: boolean
 }
 
 export interface Guitar {
@@ -122,7 +125,12 @@ class Store {
   /** Name of the library tone on stored patch n, if known. */
   channelTone(n: number) {
     const key = channels.find((c) => c.patch === n)?.key
-    return key ? (this.tones.find((t) => t.id === this.assignments[key])?.name ?? null) : null
+    return key ? (this.findTone(this.assignments[key])?.name ?? null) : null
+  }
+  /** A saved tone or a default tone by id. */
+  findTone(id: string | null | undefined): Tone | undefined {
+    if (!id) return undefined
+    return this.tones.find((t) => t.id === id) ?? presets.find((t) => t.id === id)
   }
 
   get activeGuitar() {
@@ -158,7 +166,7 @@ class Store {
     }
     await backend.setDeltas(this.activeGuitar?.deltas ?? {})
     const last = await backend.loadDoc<{ toneId: string }>('session')
-    const t = last && this.tones.find((t) => t.id === last.toneId)
+    const t = last && this.findTone(last.toneId)
     this.load(t ?? newTone(), !!t)
     this.connect()
   }
@@ -229,6 +237,7 @@ class Store {
   /** Make `t` the editor tone. `fromLibrary`: it is a saved tone (Save overwrites it). */
   load(t: Tone, fromLibrary: boolean) {
     const copy: Tone = JSON.parse(JSON.stringify(t))
+    delete copy.builtin
     copy.params = { ...defaults(), ...copy.params }
     this.tone = copy
     this.saved = JSON.stringify(copy.params)
@@ -239,9 +248,11 @@ class Store {
     if (fromLibrary) backend.saveDoc('session', { toneId: t.id })
   }
 
+  /** Open a tone in the editor and send it to the amp. A default tone opens as an unsaved
+   *  tone (Save asks for a name), since the default itself can't change. */
   open(t: Tone) {
     const go = () => {
-      this.load(t, true)
+      this.load(t, !t.builtin)
       this.view = 'editor'
       if (this.amp.connected) this.sendToAmp()
     }
@@ -257,7 +268,7 @@ class Store {
   }
 
   revert() {
-    const t = this.tones.find((t) => t.id === this.tone.id)
+    const t = this.findTone(this.tone.id)
     if (t) return this.open(t) // open() sends it
     this.load(newTone(), false)
     if (this.amp.connected) this.sendToAmp()
@@ -349,7 +360,7 @@ class Store {
         const tag = set.name.trim() || f.name.replace(/\.tsl$/i, '')
         for (const [i, p] of set.patches.entries()) {
           const values = { ...defaults(), ...p.values }
-          if ([...this.tones, ...added].some((t) => sameParams({ ...defaults(), ...t.params }, values))) { dupes++; continue }
+          if ([...this.tones, ...presets, ...added].some((t) => sameParams({ ...defaults(), ...t.params }, values))) { dupes++; continue }
           const t = newTone(p.name.trim() || `${tag} ${i + 1}`, values)
           t.tags = [tag]
           t.notes = p.memo
@@ -367,7 +378,9 @@ class Store {
   }
 
   async duplicate(t: Tone) {
-    const copy = { ...JSON.parse(JSON.stringify(t)), id: uid(), name: `${t.name} copy`, created: now(), modified: now() }
+    const copy: Tone = { ...JSON.parse(JSON.stringify(t)), id: uid(), name: `${t.name} copy`, created: now(), modified: now() }
+    delete copy.builtin
+    copy.params['com.name'] = ampName(copy.name)
     await backend.saveTone(copy)
     this.tones = [copy, ...this.tones]
   }
@@ -439,7 +452,7 @@ class Store {
       const ok = await this.busy(`Reading ${c.key} from the amp…`, async () => {
         const v = { ...defaults(), ...(await backend.readChannel(c.patch)) }
         const key = JSON.stringify(v)
-        let t = this.tones.find((t) => JSON.stringify({ ...defaults(), ...t.params }) === key)
+        let t = [...this.tones, ...presets].find((t) => JSON.stringify({ ...defaults(), ...t.params }) === key)
         if (!t) {
           const name = String(v['com.name'] ?? '').trim() || `${c.key} from amp`
           t = newTone(name, v)
@@ -493,7 +506,7 @@ class Store {
   }
 
   async writeChannel(key: string) {
-    const t = this.tones.find((t) => t.id === this.assignments[key])
+    const t = this.findTone(this.assignments[key])
     if (!t) return this.toast(`No tone assigned to ${key}`, 'error')
     if (await this.writeTone(key, t)) this.toast(`${key} ← "${t.name}"`)
   }
@@ -523,7 +536,7 @@ class Store {
     if (!ok) return
     this.ignorePatchUntil = Date.now() + 1500
     this.channel = ch.patch
-    const t = this.tones.find((t) => t.id === this.assignments[key])
+    const t = this.findTone(this.assignments[key])
     if (t && this.channelGuitar[key] === this.activeGuitarId && !this.dirty) {
       this.load(t, true)
       this.synced = true
@@ -585,14 +598,14 @@ class Store {
     for (const c of channels) {
       const id = song.channels[c.key]
       if (!id) continue
-      const t = this.tones.find((t) => t.id === id)
+      const t = this.findTone(id)
       if (!t) { missing++; continue }
       if (this.assignments[c.key] === id && this.channelGuitar[c.key] === this.activeGuitarId) continue
       if (!(await this.writeTone(c.key, t))) return // error toast already shown
     }
     this.liveSong = { setlistId: list.id, songId: song.id }
     this.persistSetlists()
-    const first = channels.find((c) => song.channels[c.key] && this.tones.some((t) => t.id === song.channels[c.key]))
+    const first = channels.find((c) => song.channels[c.key] && this.findTone(song.channels[c.key]))
     if (first) await this.selectChannel(first.key)
     if (missing) this.toast(`${missing} tone${missing === 1 ? ' was' : 's were'} deleted from the library; left as is`, 'error')
     else this.toast(`"${song.name}" is on the amp${first ? ` · ${first.key}` : ''}`)
