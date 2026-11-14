@@ -1,5 +1,5 @@
 // App state: current tone + undo, tone library, guitars, channel assignments, amp connection.
-import { backend, type Values } from './backend'
+import { backend, log, type Values } from './backend'
 import { byId, channels, defaults, param, writable, type Value } from './schema'
 
 export interface Tone {
@@ -94,6 +94,7 @@ class Store {
   }
 
   async init() {
+    log(`UI build ${__BUILD__}`)
     backend.onAmpEvent((e) => {
       if (e.kind === 'param') this.setParam(e.id, e.value, { fromAmp: true })
       else {
@@ -113,10 +114,11 @@ class Store {
     const last = await backend.loadDoc<{ toneId: string }>('session')
     const t = last && this.tones.find((t) => t.id === last.toneId)
     this.load(t ?? newTone(), !!t)
-    this.connect(true)
+    this.connect()
   }
 
   toast(text: string, kind: Toast['kind'] = 'info') {
+    if (kind === 'error') log(`error shown: ${text}`)
     const id = Date.now() + Math.random()
     this.toasts.push({ id, text, kind })
     setTimeout(() => (this.toasts = this.toasts.filter((t) => t.id !== id)), kind === 'error' ? 7000 : 3000)

@@ -26,24 +26,46 @@ export interface Backend {
   readonly mock: boolean
 }
 
+// Every call except the frequent set_params is logged (with errors) to the app's log file.
+async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const t0 = performance.now()
+  const quiet = cmd === 'set_params' || cmd === 'log_line'
+  try {
+    const r = await invoke<T>(cmd, args)
+    if (!quiet) log(`${cmd} ok (${Math.round(performance.now() - t0)} ms)`)
+    return r
+  } catch (e) {
+    log(`${cmd} FAILED (${Math.round(performance.now() - t0)} ms): ${e}`)
+    throw e
+  }
+}
+
+export function log(line: string) {
+  if ('__TAURI_INTERNALS__' in window) invoke('log_line', { line }).catch(() => {})
+  else console.log(line)
+}
+
 const tauri: Backend = {
   mock: false,
-  listPorts: () => invoke('list_ports'),
-  connect: (port) => invoke('connect', { port: port ?? null }),
-  disconnect: () => invoke('disconnect'),
-  setParams: (values) => invoke('set_params', { values }),
-  readPatch: () => invoke('read_patch'),
-  readChannel: (patch) => invoke('read_channel', { patch }),
-  writePatch: (values) => invoke('write_patch', { values }),
-  writeChannel: (patch, values) => invoke('write_channel', { patch, values }),
-  setDeltas: (deltas) => invoke('set_deltas', { deltas }),
-  listTones: () => invoke('list_tones'),
-  saveTone: (tone) => invoke('save_tone', { tone }),
-  deleteTone: (id) => invoke('delete_tone', { id }),
-  loadDoc: (name) => invoke('load_doc', { name }),
-  saveDoc: (name, value) => invoke('save_doc', { name, value }),
+  listPorts: () => call('list_ports'),
+  connect: (port) => call('connect', { port: port ?? null }),
+  disconnect: () => call('disconnect'),
+  setParams: (values) => call('set_params', { values }),
+  readPatch: () => call('read_patch'),
+  readChannel: (patch) => call('read_channel', { patch }),
+  writePatch: (values) => call('write_patch', { values }),
+  writeChannel: (patch, values) => call('write_channel', { patch, values }),
+  setDeltas: (deltas) => call('set_deltas', { deltas }),
+  listTones: () => call('list_tones'),
+  saveTone: (tone) => call('save_tone', { tone }),
+  deleteTone: (id) => call('delete_tone', { id }),
+  loadDoc: (name) => call('load_doc', { name }),
+  saveDoc: (name, value) => call('save_doc', { name, value }),
   onAmpEvent: (cb) => {
-    listen<AmpEvent>('amp-event', (e) => cb(e.payload))
+    listen<AmpEvent>('amp-event', (e) => {
+      if (e.payload.kind === 'disconnected') log(`event disconnected: ${e.payload.reason}`)
+      cb(e.payload)
+    })
   },
 }
 

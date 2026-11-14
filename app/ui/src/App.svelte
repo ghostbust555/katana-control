@@ -52,6 +52,7 @@
         <span>{n.label}</span>
       </button>
     {/each}
+    <span class="build" title="Build time">{__BUILD__}</span>
   </nav>
 
   <div class="main">
@@ -144,6 +145,7 @@
   .navbtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .navbtn.sel { background: var(--panel2); border-color: var(--line); color: var(--accent); }
   .navbtn:disabled { opacity: 0.35; }
+  .build { margin-top: auto; font-size: 10px; color: var(--dim); text-align: center; line-height: 1.3; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
   .top { height: 64px; flex: none; padding: 0 16px; border-bottom: 1px solid var(--line); gap: 8px; }
   .title { display: flex; align-items: center; gap: 6px; max-width: 360px; padding: 0 8px; }

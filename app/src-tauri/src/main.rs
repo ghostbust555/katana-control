@@ -7,9 +7,52 @@ use katana_core::session::{Event, Session};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
+
+// ---- log: logs\<unix time>-studio.log next to the exe (on the share when run from there) ----
+
+static LOG: OnceLock<Mutex<fs::File>> = OnceLock::new();
+static START: OnceLock<Instant> = OnceLock::new();
+
+fn init_log() {
+    START.get_or_init(Instant::now);
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|p| p.join("logs")));
+    if let Some(dir) = dir
+        && fs::create_dir_all(&dir).is_ok()
+        && let Ok(f) = fs::File::create(dir.join(format!("{secs}-studio.log")))
+    {
+        let _ = LOG.set(Mutex::new(f));
+        log(&format!(
+            "Katana Studio {} started (unix {secs})",
+            env!("CARGO_PKG_VERSION")
+        ));
+    }
+}
+
+fn log(line: &str) {
+    if let Some(f) = LOG.get() {
+        let t = START
+            .get()
+            .map(|s| s.elapsed().as_secs_f64())
+            .unwrap_or(0.0);
+        let _ = writeln!(f.lock().unwrap(), "[{t:9.3}] {line}");
+    }
+}
+
+#[tauri::command]
+fn log_line(line: String) {
+    log(&line);
+}
 
 /// Tone values in the UI are guitar-independent; the active guitar's deltas are added on the way
 /// to the amp and removed on the way back.
@@ -77,6 +120,7 @@ fn connect(app: AppHandle, state: State<AppState>, port: Option<String>) -> CmdR
                 AmpEvent::Param { id, value: v }
             }
             Event::Disconnected { reason } => {
+                log(&format!("amp disconnected: {reason}"));
                 *st.session.lock().unwrap() = None;
                 AmpEvent::Disconnected { reason }
             }
@@ -285,6 +329,7 @@ fn data_folder(app: AppHandle) -> CmdResult<String> {
 }
 
 fn main() {
+    init_log();
     tauri::Builder::default()
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
@@ -302,7 +347,8 @@ fn main() {
             delete_tone,
             load_doc,
             save_doc,
-            data_folder
+            data_folder,
+            log_line
         ])
         .run(tauri::generate_context!())
         .expect("error while running Katana Studio");
