@@ -1,7 +1,12 @@
-import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vite'
+import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { fileURLToPath } from 'node:url'
 
-// https://vite.dev/config/
+const schema = fileURLToPath(new URL('../../crates/katana-core/schema/katana-gen3.json', import.meta.url))
+
 export default defineConfig({
   plugins: [svelte()],
+  resolve: { alias: { '$schema': schema } },
+  server: { port: 5174, strictPort: true, fs: { allow: ['..', '../../crates/katana-core/schema'] } },
+  build: { target: 'chrome110', chunkSizeWarningLimit: 2000 },
 })

@@ -37093,6 +37093,7 @@
       {
        "label": "Amp",
        "params": [
+        "amp.type",
         "amp.gain",
         "amp.volume",
         "amp.bass",
@@ -37100,7 +37101,6 @@
         "amp.treble",
         "amp.presence",
         "amp.poweramp_variation",
-        "amp.type",
         "amp.resonance",
         "amp.preamp_variation"
        ]

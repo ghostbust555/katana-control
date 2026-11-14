@@ -1,5 +1,17 @@
 # katana-control
 
+**Katana Studio** (`app/`, `katana-studio.exe`): a touch-friendly replacement for BOSS Tone Studio
+for the KATANA Gen 3. It has a tone editor with every patch parameter, a tone library with A1/A2/B1/B2
+channel assignment, and per-guitar adjustments. Run it from the share (it needs `WebView2Loader.dll`
+next to it), with Tone Studio closed. Tones, guitars and channel assignments are saved in
+`%APPDATA%\app.katana-studio\`.
+
+Layout: `crates/katana-core` (SysEx, schema, amp session), `crates/katana-cli` (`katana-control.exe`,
+the command-line tool below), `app/` (Tauri 2 + Svelte UI). UI development in a browser:
+`cd app/ui && npm run dev` (it uses a mock amp outside Tauri).
+
+The parameter schema `crates/katana-core/schema/katana-gen3.json` lists every patch parameter's address, range and encoding.
+
 Control a BOSS **Katana Gen 3** amp from a PC over USB without BOSS Tone Studio, by
 learning the protocol Tone Studio speaks and replaying it.
 

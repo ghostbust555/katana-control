@@ -1,89 +1,177 @@
-<script>
-  import svelteLogo from './assets/svelte.svg'
-  import viteLogo from './assets/vite.svg'
-  import heroImg from './assets/hero.png'
-  import Counter from './lib/Counter.svelte'
+<script lang="ts">
+  import { backend } from './lib/backend'
+  import { store, type View } from './lib/store.svelte'
+  import Editor from './views/Editor.svelte'
+  import Guitars from './views/Guitars.svelte'
+  import Library from './views/Library.svelte'
+
+  store.init()
+
+  const NAV: { view: View | 'community'; label: string; icon: string }[] = [
+    { view: 'editor', label: 'Editor', icon: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4' },
+    { view: 'library', label: 'Tones', icon: 'M4 5h16v4H4zM4 11h16v4H4zM4 17h10v3H4z' },
+    { view: 'guitars', label: 'Guitars', icon: 'M14 3l7 7-3 1-4-4 1-3zM12 8l4 4-6 6a3 3 0 11-4-4l6-6zM8 16l.01 0' },
+    { view: 'community', label: 'Community', icon: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18' },
+  ]
+
+  let guitarMenu = $state(false)
+
+  function saveAs() {
+    store.ask = { title: 'Save as a new tone', value: `${store.tone.name} 2`, okLabel: 'Save', onsubmit: (v) => v.trim() && store.save(v.trim()) }
+  }
+  function rename() {
+    store.ask = { title: 'Rename tone', value: store.tone.name, okLabel: 'Rename', onsubmit: (v) => v.trim() && store.rename(v.trim()) }
+  }
+  function save() {
+    if (store.inLibrary) store.save()
+    else store.ask = { title: 'Save tone', value: store.tone.name, okLabel: 'Save', onsubmit: (v) => v.trim() && store.save(v.trim()) }
+  }
+
+  function keys(e: KeyboardEvent) {
+    if (store.ask || store.confirm) return
+    const mod = e.ctrlKey || e.metaKey
+    const typing = e.target instanceof HTMLInputElement && e.target.type !== 'range'
+    if (mod && e.key === 's') { e.preventDefault(); save() }
+    else if (typing) return
+    else if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); store.undo() }
+    else if (mod && (e.key === 'y' || (e.key === 'Z' && e.shiftKey))) { e.preventDefault(); store.redo() }
+  }
+
+  let askInput: HTMLInputElement | undefined = $state()
+  $effect(() => { if (store.ask) askInput?.select() })
 </script>
 
-<section id="center">
-  <div class="hero">
-    <img src={heroImg} class="base" width="170" height="179" alt="" />
-    <img src={svelteLogo} class="framework" alt="Svelte logo" />
-    <img src={viteLogo} class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/App.svelte</code> and save to test <code>HMR</code></p>
-  </div>
-  <Counter />
-</section>
+<svelte:window onkeydown={keys} />
 
-<div class="ticks"></div>
+<div class="shell">
+  <nav class="rail" aria-label="Views">
+    {#each NAV as n}
+      <button class="navbtn" class:sel={store.view === n.view} disabled={n.view === 'community'}
+        title={n.view === 'community' ? 'Coming later' : n.label} onclick={() => n.view !== 'community' && (store.view = n.view)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d={n.icon} /></svg>
+        <span>{n.label}</span>
+      </button>
+    {/each}
+  </nav>
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#documentation-icon"></use>
-    </svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank" rel="noreferrer">
-          <img class="logo" src={viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://svelte.dev/" target="_blank" rel="noreferrer">
-          <img class="button-icon" src={svelteLogo} alt="" />
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true">
-      <use href="/icons.svg#social-icon"></use>
-    </svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li>
-        <a href="https://github.com/vitejs/vite" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#github-icon"></use>
-          </svg>
-          GitHub
-        </a>
-      </li>
-      <li>
-        <a href="https://chat.vite.dev/" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#discord-icon"></use>
-          </svg>
-          Discord
-        </a>
-      </li>
-      <li>
-        <a href="https://x.com/vite_js" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#x-icon"></use>
-          </svg>
-          X.com
-        </a>
-      </li>
-      <li>
-        <a href="https://bsky.app/profile/vite.dev" target="_blank" rel="noreferrer">
-          <svg class="button-icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#bluesky-icon"></use>
-          </svg>
-          Bluesky
-        </a>
-      </li>
-    </ul>
-  </div>
-</section>
+  <div class="main">
+    <header class="top row">
+      <button class="ghost title" onclick={rename} title="Rename">
+        <span class="tname">{store.tone.name}</span>{#if store.dirty}<span class="mod" title="Unsaved changes">●</span>{/if}
+      </button>
+      <button class="ghost icon" title="Undo (Ctrl+Z)" disabled={!store.undoStack.length} onclick={() => store.undo()}>↶</button>
+      <button class="ghost icon" title="Redo (Ctrl+Y)" disabled={!store.redoStack.length} onclick={() => store.redo()}>↷</button>
+      <button class="primary" onclick={save} title="Ctrl+S">Save</button>
+      <details class="menu">
+        <summary>More ▾</summary>
+        <div class="menu-list" role="menu">
+          <button onclick={saveAs}>Save as new…</button>
+          <button onclick={() => store.newTone()}>New tone</button>
+          <button disabled={!store.dirty} onclick={() => store.revert()}>Revert changes</button>
+          <button disabled={!store.amp.connected} onclick={() => store.pullFromAmp()}>Load from amp</button>
+          <button disabled={!store.amp.connected} onclick={() => store.sendToAmp()}>Send to amp</button>
+        </div>
+      </details>
 
-<div class="ticks"></div>
-<section id="spacer"></section>
+      <span class="grow"></span>
+      {#if store.amp.busy}<span class="busy"><span class="spin"></span>{store.amp.busy}</span>{/if}
+
+      <button class="chip-btn" onclick={() => (guitarMenu = !guitarMenu)} title="Active guitar">
+        🎸 {store.activeGuitar?.name ?? 'No guitar'} ▾
+      </button>
+      {#if store.amp.connected}
+        <button class="chip-btn conn on" onclick={() => store.disconnect()} title="Disconnect">
+          <span class="dot"></span>{store.amp.port}{backend.mock ? ' · demo' : ''}
+        </button>
+      {:else}
+        <button class="chip-btn conn" disabled={!!store.amp.busy} onclick={() => store.connect()}><span class="dot"></span>Connect amp</button>
+      {/if}
+    </header>
+
+    {#if guitarMenu}
+      <div class="gmenu" role="menu">
+        <button class:sel={!store.activeGuitarId} onclick={() => { store.setActiveGuitar(null); guitarMenu = false }}>No guitar</button>
+        {#each store.guitars as g (g.id)}
+          <button class:sel={store.activeGuitarId === g.id} onclick={() => { store.setActiveGuitar(g.id); guitarMenu = false }}>{g.name}</button>
+        {/each}
+        <button class="ghost" onclick={() => { store.view = 'guitars'; guitarMenu = false }}>Manage guitars…</button>
+      </div>
+    {/if}
+
+    <main class="view">
+      {#if store.view === 'editor'}<Editor />{:else if store.view === 'library'}<Library />{:else}<Guitars />{/if}
+    </main>
+  </div>
+</div>
+
+<div class="toasts" aria-live="polite">
+  {#each store.toasts as t (t.id)}<div class="toast" class:error={t.kind === 'error'}>{t.text}</div>{/each}
+</div>
+
+{#if store.confirm}
+  {@const c = store.confirm}
+  <div class="backdrop" role="presentation">
+    <div class="dialog" role="alertdialog" aria-label={c.title}>
+      <h2>{c.title}</h2>
+      <p>{c.body}</p>
+      <div class="row end">
+        {#each c.actions as a}
+          <button class:primary={a.primary} onclick={() => { const run = a.run; store.confirm = null; run() }}>{a.label}</button>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if store.ask}
+  {@const a = store.ask}
+  <div class="backdrop" role="presentation">
+    <form class="dialog" aria-label={a.title} onsubmit={(e) => { e.preventDefault(); const v = askInput?.value ?? ''; const done = a.onsubmit; store.ask = null; done(v) }}>
+      <h2>{a.title}</h2>
+      <input bind:this={askInput} type="text" value={a.value} />
+      <div class="row end">
+        <button type="button" onclick={() => (store.ask = null)}>Cancel</button>
+        <button class="primary" type="submit">{a.okLabel}</button>
+      </div>
+    </form>
+  </div>
+{/if}
+
+<style>
+  .shell { display: flex; height: 100%; }
+  .rail { width: 88px; flex: none; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; padding: 10px 8px; }
+  .navbtn { height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; border-color: transparent; background: transparent; font-size: 13px; }
+  .navbtn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .navbtn.sel { background: var(--panel2); border-color: var(--line); color: var(--accent); }
+  .navbtn:disabled { opacity: 0.35; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .top { height: 64px; flex: none; padding: 0 16px; border-bottom: 1px solid var(--line); gap: 8px; }
+  .title { display: flex; align-items: center; gap: 6px; max-width: 360px; padding: 0 8px; }
+  .tname { font-size: 20px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  .mod { color: var(--accent); font-size: 14px; }
+  .icon { width: var(--tap); padding: 0; font-size: 22px; }
+  .menu { position: relative; }
+  .menu summary { list-style: none; min-height: var(--tap); display: flex; align-items: center; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu-list { position: absolute; top: 50px; left: 0; z-index: 30; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 220px; box-shadow: 0 10px 30px #0008; }
+  .menu-list button { text-align: left; border-color: transparent; background: transparent; }
+  .menu-list button:hover:not(:disabled) { background: var(--panel2); }
+  .chip-btn { border-radius: 22px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+  .conn { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
+  .conn.on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .busy { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 14px; }
+  .spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .gmenu { position: absolute; top: 62px; right: 150px; z-index: 30; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 240px; box-shadow: 0 10px 30px #0008; }
+  .gmenu button { text-align: left; }
+  .gmenu .sel { border-color: var(--accent); }
+  .view { flex: 1; min-height: 0; }
+  .toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 60; pointer-events: none; }
+  .toast { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; box-shadow: 0 6px 20px #0008; max-width: 70vw; }
+  .toast.error { border-color: var(--danger); }
+  .backdrop { position: fixed; inset: 0; background: #0009; display: grid; place-items: center; z-index: 55; }
+  .dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(520px, 92vw); display: flex; flex-direction: column; gap: 14px; }
+  .dialog p { margin: 0; color: var(--dim); line-height: 1.4; }
+  .end { justify-content: flex-end; flex-wrap: wrap; }
+</style>
