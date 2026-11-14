@@ -288,6 +288,7 @@ class Store {
     } finally {
       this.amp.busy = ''
     }
+    await this.loadChannelsFromAmp()
     this.confirm = {
       title: 'Amp connected',
       body: 'Load the sound that is on the amp now into the editor, or send the editor tone to the amp?',
@@ -297,6 +298,29 @@ class Store {
         { label: 'Load from amp', primary: true, run: () => this.pullFromAmp() },
       ],
     }
+  }
+
+  /** Read A1/A2/B1/B2 from the amp and show them in the channel slots. A channel whose sound
+   *  matches a library tone is linked to it; otherwise it is saved as a new tone tagged "from-amp". */
+  async loadChannelsFromAmp() {
+    for (const c of channels) {
+      const ok = await this.busy(`Reading ${c.key} from the amp…`, async () => {
+        const v = { ...defaults(), ...(await backend.readChannel(c.patch)) }
+        const key = JSON.stringify(v)
+        let t = this.tones.find((t) => JSON.stringify({ ...defaults(), ...t.params }) === key)
+        if (!t) {
+          const name = String(v['com.name'] ?? '').trim() || `${c.key} from amp`
+          t = newTone(name, v)
+          t.tags = ['from-amp']
+          await backend.saveTone(t)
+          this.tones = [t, ...this.tones]
+        }
+        this.assignments[c.key] = t.id
+        return true
+      })
+      if (!ok) break // amp stopped answering; the error toast is already shown
+    }
+    backend.saveDoc('channels', this.assignments)
   }
 
   async disconnect() {

@@ -137,6 +137,28 @@ async fn read_patch(app: AppHandle) -> CmdResult<BTreeMap<String, Value>> {
 }
 
 #[tauri::command]
+async fn read_channel(app: AppHandle, patch: u8) -> CmdResult<BTreeMap<String, Value>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let raw = session(&state)?
+            .as_ref()
+            .unwrap()
+            .read_channel(patch)
+            .map_err(err)?;
+        let d = state.deltas.lock().unwrap();
+        Ok(raw
+            .into_iter()
+            .map(|(id, v)| {
+                let t = with_delta(&d, &id, &v, -1);
+                (id, t)
+            })
+            .collect())
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
 async fn write_patch(app: AppHandle, values: BTreeMap<String, Value>) -> CmdResult<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
@@ -271,6 +293,7 @@ fn main() {
             disconnect,
             set_params,
             read_patch,
+            read_channel,
             write_patch,
             write_channel,
             set_deltas,

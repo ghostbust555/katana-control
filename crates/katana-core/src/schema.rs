@@ -86,6 +86,12 @@ pub fn schema() -> &'static Schema {
 
 pub const PATCH_BASE: u32 = 0x20 << 21; // 20 00 00 00 in linear form
 
+/// Where patch memory `n` is stored (0 = PANEL, 1 = A:CH1 ... 8 = B:CH4): Tone Studio's librarian
+/// row n is PATCH(n+1), at 20 10 00 00, 20 20 00 00, ... (steps of 00 10 00 00).
+pub fn stored_patch_base(n: u8) -> u32 {
+    PATCH_BASE + (n as u32 + 1) * (0x10 << 14)
+}
+
 impl Schema {
     pub fn get(&self, id: &str) -> Option<&Param> {
         self.by_id.get(id).map(|&i| &self.params[i])
@@ -236,6 +242,14 @@ mod tests {
             name.decode(&name.encode(&Value::from("Brown crunch"))),
             Value::from("Brown crunch    ")
         );
+    }
+
+    #[test]
+    fn stored_patch_addresses() {
+        assert_eq!(roland::to_7bit4(stored_patch_base(0)), [0x20, 0x10, 0, 0]); // PANEL
+        assert_eq!(roland::to_7bit4(stored_patch_base(1)), [0x20, 0x20, 0, 0]); // A1
+        assert_eq!(roland::to_7bit4(stored_patch_base(6)), [0x20, 0x70, 0, 0]); // B2
+        assert_eq!(roland::to_7bit4(stored_patch_base(7)), [0x21, 0x00, 0, 0]); // B3
     }
 
     #[test]

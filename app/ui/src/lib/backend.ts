@@ -13,6 +13,7 @@ export interface Backend {
   disconnect(): Promise<void>
   setParams(values: Values): Promise<void>
   readPatch(): Promise<Values>
+  readChannel(patch: number): Promise<Values>
   writePatch(values: Values): Promise<void>
   writeChannel(patch: number, values: Values): Promise<void>
   setDeltas(deltas: Record<string, number>): Promise<void>
@@ -32,6 +33,7 @@ const tauri: Backend = {
   disconnect: () => invoke('disconnect'),
   setParams: (values) => invoke('set_params', { values }),
   readPatch: () => invoke('read_patch'),
+  readChannel: (patch) => invoke('read_channel', { patch }),
   writePatch: (values) => invoke('write_patch', { values }),
   writeChannel: (patch, values) => invoke('write_channel', { patch, values }),
   setDeltas: (deltas) => invoke('set_deltas', { deltas }),
@@ -58,6 +60,7 @@ function mockBackend(): Backend {
     disconnect: async () => {},
     setParams: async (v) => void Object.assign(amp, v),
     readPatch: async () => (await sleep(600), { ...amp }),
+    readChannel: async (patch) => (await sleep(300), { ...defaults(), 'com.name': `CH ${patch} TONE`.padEnd(16, ' '), 'amp.gain': 20 + patch * 10 }),
     writePatch: async (v) => (await sleep(400), void (amp = { ...amp, ...v })),
     writeChannel: async () => void (await sleep(700)),
     setDeltas: async () => {},

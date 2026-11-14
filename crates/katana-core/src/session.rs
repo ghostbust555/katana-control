@@ -4,7 +4,7 @@
 
 use crate::amp::Connection;
 use crate::roland::{self, Parsed, Target, from_7bit};
-use crate::schema::{PATCH_BASE, Value, encode_patch, schema};
+use crate::schema::{PATCH_BASE, Value, encode_patch, schema, stored_patch_base};
 use anyhow::{Result, anyhow, bail};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -37,7 +37,8 @@ type Reply<T> = Sender<Result<T>>;
 
 enum Cmd {
     SetParams(Vec<(String, Value)>),
-    ReadPatch(Reply<BTreeMap<String, Value>>),
+    /// Read the current patch (None) or stored patch memory n.
+    ReadPatch(Option<u8>, Reply<BTreeMap<String, Value>>),
     WritePatch(BTreeMap<String, Value>, Reply<()>),
     WriteChannel(u8, BTreeMap<String, Value>, Reply<()>),
     Close,
@@ -95,7 +96,12 @@ impl Session {
 
     /// Read every parameter of the amp's current patch.
     pub fn read_patch(&self) -> Result<BTreeMap<String, Value>> {
-        self.call(Cmd::ReadPatch, Duration::from_secs(60))
+        self.call(|r| Cmd::ReadPatch(None, r), Duration::from_secs(60))
+    }
+
+    /// Read the patch stored in channel memory `patch` (1 = A1 ... 8 = B4) without loading it.
+    pub fn read_channel(&self, patch: u8) -> Result<BTreeMap<String, Value>> {
+        self.call(|r| Cmd::ReadPatch(Some(patch), r), Duration::from_secs(60))
     }
 
     /// Replace the amp's current patch (not saved to a channel).
@@ -192,8 +198,8 @@ impl Worker {
                     return;
                 }
                 Msg::Cmd(Cmd::SetParams(v)) => self.set_params(v),
-                Msg::Cmd(Cmd::ReadPatch(r)) => {
-                    let res = self.read_patch();
+                Msg::Cmd(Cmd::ReadPatch(n, r)) => {
+                    let res = self.read_patch(n.map_or(PATCH_BASE, stored_patch_base));
                     let failed = res.is_err();
                     let _ = r.send(res);
                     if failed {
@@ -253,12 +259,12 @@ impl Worker {
         Ok(())
     }
 
-    fn read_patch(&mut self) -> Result<BTreeMap<String, Value>> {
+    fn read_patch(&mut self, base: u32) -> Result<BTreeMap<String, Value>> {
         let s = schema();
         let mut image: HashMap<u32, u8> = HashMap::new();
         for (start, ps) in s.runs(CHUNK) {
             let len: u32 = ps.iter().map(|p| p.len).sum();
-            let addr = roland::to_7bit4(PATCH_BASE + start);
+            let addr = roland::to_7bit4(base + start);
             let rq = roland::rq1(&self.t, addr, len);
             self.send(&rq)?;
             // The amp may answer in several DT1 pieces; collect until the run is complete.
@@ -270,7 +276,7 @@ impl Worker {
                         if let Parsed::Dt1 { addr: a, data, .. } =
                             roland::parse(&m, self.t.model_id.len())
                         {
-                            let off = from_7bit(&a).wrapping_sub(PATCH_BASE);
+                            let off = from_7bit(&a).wrapping_sub(base);
                             for (i, b) in data.iter().enumerate() {
                                 image.insert(off + i as u32, *b);
                             }
