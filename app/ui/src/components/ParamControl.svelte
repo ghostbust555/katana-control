@@ -1,7 +1,7 @@
 <script lang="ts">
   // One parameter as a compact tile: tap it to open its control in a popover at the press
   // point (slider with −/+ for numbers, option grid for choices, a text box for the name).
-  // On/off switches toggle in place. `toggle` pairs an on/off switch with this param
+  // On/off switches, and choices with only two options, toggle in place. `toggle` pairs an on/off switch with this param
   // (e.g. Solo On + Solo Level): the switch toggles in place, the rest of the tile opens the
   // control while it's on.
   import { isNumeric, format, type Param, type Value } from '../lib/schema'
@@ -23,6 +23,8 @@
   const num = $derived(typeof value === 'number' ? value : Number(p.init))
   const frac = $derived((num - p.min) / Math.max(1, p.max - p.min))
   const off = $derived(!!toggle && !toggle.value)
+  /** A two-option choice (e.g. Original / Variation) shown as a switch labelled with the option. */
+  const binary = $derived(!p.switch && !toggle && p.options?.length === 2)
   const changed = $derived(effective !== undefined && effective !== value)
   /** Displayed value split into number and unit, so the unit can be smaller. */
   const shown = $derived.by(() => {
@@ -36,6 +38,13 @@
   <button class="tile sw" class:on={!!num} role="switch" aria-checked={!!num} onclick={() => onchange(num ? 0 : 1)}>
     <span class="label">{p.label}</span>
     <span class="row"><b class="val">{num ? 'On' : 'Off'}</b><span class="lever"></span></span>
+  </button>
+{:else if binary}
+  {@const second = num - p.min === 1}
+  <button class="tile sw" class:on={second} role="switch" aria-checked={second} aria-label="{p.label}: {p.options![num - p.min]}"
+    onclick={() => onchange(p.min + (second ? 0 : 1))}>
+    <span class="label">{p.label}</span>
+    <span class="row"><b class="val opt">{p.options![num - p.min]}</b><span class="lever"></span></span>
   </button>
 {:else}
   <div class="tile" class:paired={!!toggle} class:off class:choice={!isNumeric(p)} bind:clientWidth={tw}>
@@ -113,6 +122,7 @@
   .on .lever { background: var(--accent-dim); }
   .on .lever::after { transform: translateX(20px); background: var(--accent); }
   .sw.on .val { color: var(--accent); }
+  .val.opt { font-size: 18px; }
   .pair-sw { width: 72px; flex: none; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 12px 0 0 12px; background: transparent; }
   .pair-sw .lever { margin: 0; }
   .head { gap: 12px; }

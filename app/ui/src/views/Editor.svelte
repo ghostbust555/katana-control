@@ -54,10 +54,7 @@
             onclick={() => store.setParam(b.switch!, isOn(b.key) ? 0 : 1)}><span class="led" class:lit={isOn(b.key)}></span></button>
         {/if}
         <button class="tile-body" onclick={() => (store.block = b.key)}>
-          <span class="row tile-top">
-            <span class="name">{b.label}</span>
-            {#if b.color}<span class="pip" style="background:{COLOR_CSS[variationIndex(b, values)]}"></span>{/if}
-          </span>
+          <span class="name">{b.label}</span>
           <span class="sub">{subtitle(b.key)}</span>
         </button>
       </div>
@@ -118,17 +115,15 @@
 <style>
   .editor { display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 16px 16px; }
   .chain { display: flex; gap: 8px; padding-bottom: 4px; flex: none; scrollbar-width: thin; }
-  .tile { flex: none; width: 140px; height: 68px; display: flex; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); overflow: hidden; }
+  .tile { flex: none; min-width: 96px; max-width: 170px; height: 68px; display: flex; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); overflow: hidden; }
   .tile.sel { border-color: var(--accent); background: #2c2518; }
-  .led-btn { width: 34px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: #0002; flex: none; }
-  .tile-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 6px 10px; text-align: left; border: 0; border-radius: 0; background: transparent; }
+  .led-btn { width: 30px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: #0002; flex: none; }
+  .tile-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 6px 8px; text-align: left; border: 0; border-radius: 0; background: transparent; }
   .tile.off .name { color: var(--dim); }
-  .tile-top { gap: 7px; width: 100%; }
-  .name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sub { font-size: 12px; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .led { width: 12px; height: 12px; border-radius: 50%; background: #3a3f48; flex: none; }
   .led.lit { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
-  .pip { width: 4px; height: 18px; border-radius: 2px; flex: none; }
 
   .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
   .phead { padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; gap: 12px; }
