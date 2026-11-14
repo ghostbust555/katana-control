@@ -83,5 +83,16 @@ export const provider: LlmProvider = {
   defaultModel: 'claude-opus-5-5',
   needsKey: true,
   needsBaseUrl: false,
+  hint: 'Get a key at console.anthropic.com. It is stored only on this device and sent only to the API.',
   newSession: (s, system, tools) => new AnthropicSession(s, system, tools),
+  async listModels(s) {
+    const client = new Anthropic({ apiKey: s.apiKey, dangerouslyAllowBrowser: true })
+    const out = []
+    try {
+      for await (const m of client.models.list()) out.push({ id: m.id, name: m.display_name })
+    } catch (e) {
+      throw toLlmError(e)
+    }
+    return out
+  },
 }

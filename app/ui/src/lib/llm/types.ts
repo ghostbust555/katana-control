@@ -48,13 +48,24 @@ export interface LlmSettings {
   baseUrl: string
 }
 
+export interface ModelInfo {
+  id: string
+  name: string
+  /** Price, context size, ... */
+  detail?: string
+}
+
 export interface LlmProvider {
   id: string
   label: string
   defaultModel: string
   needsKey: boolean
   needsBaseUrl: boolean
+  /** Shown under the settings, e.g. where to get a key. */
+  hint?: string
   newSession(settings: LlmSettings, system: string, tools: ToolDef[]): ChatSession
+  /** Models to pick from (only ones that can call tools, where the provider says). */
+  listModels?(settings: LlmSettings): Promise<ModelInfo[]>
 }
 
 export type LlmErrorKind = 'auth' | 'rate' | 'network' | 'aborted' | 'other'

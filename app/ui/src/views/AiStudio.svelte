@@ -3,7 +3,7 @@
   import { tick } from 'svelte'
   import Popover from '../components/Popover.svelte'
   import { ai, type ChatEntry } from '../lib/ai.svelte'
-  import { providers, type LlmSettings } from '../lib/llm'
+  import { providers, type LlmSettings, type ModelInfo } from '../lib/llm'
   import { pressAt, type Point } from '../lib/press'
   import { format, layout, param } from '../lib/schema'
   import { store } from '../lib/store.svelte'
@@ -16,6 +16,39 @@
   let settingsAt = $state<Point | null>(null)
   let form = $state<LlmSettings>({ provider: 'anthropic', apiKey: '', model: '', baseUrl: '' })
   let open = $state<Record<number, boolean>>({})
+  // Settings form: per-provider edits survive switching back and forth before saving.
+  let drafts: Record<string, LlmSettings> = {}
+  let models = $state<ModelInfo[] | null>(null)
+  let modelsMsg = $state('')
+  let modelQuery = $state('')
+  const shownModels = $derived.by(() => {
+    const q = modelQuery.trim().toLowerCase()
+    return (models ?? []).filter((m) => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)).slice(0, 150)
+  })
+
+  function pickProvider(id: string) {
+    drafts[form.provider] = { ...form }
+    form = drafts[id] ?? ai.settingsFor(id)
+    models = null
+    modelsMsg = ''
+  }
+  async function browseModels() {
+    const p = providers.find((x) => x.id === form.provider)
+    if (!p?.listModels) return
+    models = null
+    modelQuery = ''
+    modelsMsg = 'Loading models…'
+    try {
+      models = await p.listModels(form)
+      modelsMsg = models.length ? '' : 'No models found.'
+    } catch (e) {
+      modelsMsg = e instanceof Error ? e.message : String(e)
+    }
+  }
+  function pickModel(m: ModelInfo) {
+    form.model = m.id
+    models = null
+  }
 
   const SUGGESTIONS = [
     'Crunchy AC/DC rhythm, no effects',
@@ -30,6 +63,11 @@
       .map((b) => b.label),
   )
   const current = $derived(JSON.stringify(store.tone.params))
+
+  // The setup screen edits the chosen provider's settings.
+  $effect(() => {
+    if (ai.loaded && !ai.ready) form = { ...ai.settings }
+  })
 
   // Keep the newest message in view while it streams.
   $effect(() => {
@@ -70,7 +108,7 @@
   <span class="dim">Model provider</span>
   <div class="provs">
     {#each providers as p (p.id)}
-      <button class:sel={form.provider === p.id} onclick={() => (form.provider = p.id)}>{p.label}</button>
+      <button class:sel={form.provider === p.id} onclick={() => pickProvider(p.id)}>{p.label}</button>
     {/each}
   </div>
   {#if provider.needsBaseUrl}
@@ -79,11 +117,27 @@
   {/if}
   <label class="field"><span class="dim">API key{provider.needsKey ? '' : ' (if the server needs one)'}</span>
     <input type="password" placeholder={provider.id === 'anthropic' ? 'sk-ant-…' : ''} bind:value={form.apiKey} autocomplete="off" /></label>
-  <label class="field"><span class="dim">Model</span>
-    <input type="text" placeholder={provider.defaultModel} bind:value={form.model} /></label>
-  {#if provider.id === 'anthropic'}
-    <p class="dim small">Get a key at console.anthropic.com. It is stored only on this device and sent only to the API.</p>
+  <div class="field"><span class="dim">Model</span>
+    <div class="row modelrow">
+      <input type="text" placeholder={provider.defaultModel} bind:value={form.model} />
+      {#if provider.listModels}
+        <button disabled={provider.needsKey && provider.id === 'anthropic' && !form.apiKey} onclick={() => (models ? (models = null) : browseModels())}>
+          {models ? 'Close list' : 'Browse models'}</button>
+      {/if}
+    </div>
+  </div>
+  {#if modelsMsg}<p class="dim small">{modelsMsg}</p>{/if}
+  {#if models}
+    <input type="search" placeholder="Search {models.length} models (e.g. claude, gpt, gemini, free)" bind:value={modelQuery} />
+    <div class="models scroll">
+      {#each shownModels as m (m.id)}
+        <button class="model" class:sel={form.model === m.id} onclick={() => pickModel(m)}>
+          <b>{m.name}</b><span class="dim small">{m.id}{m.detail ? ' · ' + m.detail : ''}</span>
+        </button>
+      {/each}
+    </div>
   {/if}
+  {#if provider.hint}<p class="dim small">{provider.hint}</p>{/if}
 {/snippet}
 
 <div class="studio">
@@ -193,8 +247,16 @@
   .chip { font-size: 13px; padding: 2px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
   .setup { margin: auto; width: min(620px, 100%); display: flex; flex-direction: column; gap: 12px; }
   .setup h2 { margin: 0; }
-  .provs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .provs button { min-height: 60px; }
+  .provs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .modelrow { gap: 10px; }
+  .modelrow input { flex: 1; min-width: 0; }
+  .modelrow button { min-height: 56px; flex: none; }
+  .models { max-height: 300px; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+  .model { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 60px; padding: 8px 14px; text-align: left; flex: none; width: 100%; white-space: normal; }
+  .model span { overflow-wrap: anywhere; }
+  .model.sel { border-color: var(--accent); background: var(--accent-dim); }
+  input[type='search'] { min-height: 52px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); }
+  .provs button { min-height: 60px; white-space: normal; line-height: 1.2; padding: 4px 10px; }
   .provs button.sel { background: var(--accent-dim); border-color: var(--accent); }
   .field { display: flex; flex-direction: column; gap: 4px; }
   .field input { min-height: 56px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); }

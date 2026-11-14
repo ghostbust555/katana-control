@@ -205,31 +205,43 @@ function changeText(id: string, from: Value, to: Value) {
 
 // ------------------------------------------------------------------ conversation
 
-const SETTINGS: LlmSettings = { provider: 'anthropic', apiKey: '', model: '', baseUrl: '' }
+type ProviderSettings = Omit<LlmSettings, 'provider'>
+/** Saved as the "ai" doc: the chosen provider, and key/model/URL for each provider used. */
+interface Stored { provider: string; byProvider: Record<string, ProviderSettings> }
+const EMPTY: ProviderSettings = { apiKey: '', model: '', baseUrl: '' }
 
 class AiStudio {
   entries = $state<ChatEntry[]>([])
   busy = $state(false)
   status = $state('')
-  settings = $state<LlmSettings>({ ...SETTINGS })
+  private stored = $state<Stored>({ provider: 'anthropic', byProvider: {} })
   loaded = $state(false)
   private session: ChatSession | null = null
   private abort: AbortController | null = null
   private nextId = 1
 
-  get provider() { return providerById(this.settings.provider) }
+  /** Settings of the chosen provider. */
+  get settings(): LlmSettings { return this.settingsFor(this.stored.provider) }
+  settingsFor(id: string): LlmSettings { return { provider: id, ...EMPTY, ...this.stored.byProvider[id] } }
+  get provider() { return providerById(this.stored.provider) }
   /** Whether enough is set up to send a request. */
   get ready() { return (!this.provider.needsKey || !!this.settings.apiKey) && (!this.provider.needsBaseUrl || !!this.settings.baseUrl) }
 
   async init() {
     if (this.loaded) return
-    this.settings = { ...SETTINGS, ...(await backend.loadDoc<Partial<LlmSettings>>('ai')) }
+    const doc = await backend.loadDoc<Partial<Stored> & Partial<LlmSettings>>('ai')
+    if (doc?.byProvider) this.stored = { provider: doc.provider ?? 'anthropic', byProvider: doc.byProvider }
+    else if (doc?.provider) { // first version stored one flat settings object
+      const { provider, apiKey = '', model = '', baseUrl = '' } = doc
+      this.stored = { provider, byProvider: { [provider]: { apiKey, model, baseUrl } } }
+    }
     this.loaded = true
   }
 
   async saveSettings(s: LlmSettings) {
-    this.settings = { ...s, apiKey: s.apiKey.trim(), model: s.model.trim(), baseUrl: s.baseUrl.trim() }
-    await backend.saveDoc('ai', this.settings)
+    this.stored.provider = s.provider
+    this.stored.byProvider[s.provider] = { apiKey: s.apiKey.trim(), model: s.model.trim(), baseUrl: s.baseUrl.trim() }
+    await backend.saveDoc('ai', $state.snapshot(this.stored))
     this.session = null // the next request starts a conversation with the new settings
   }
 
