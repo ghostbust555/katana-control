@@ -16,6 +16,7 @@
 // Guitars and pickups differ, so tweak by ear.
 import type { Values } from './backend'
 import BASE from './preset-base.json'
+import PLAYER from './presets-player.json'
 import { byId, defaults, type Value } from './schema'
 import type { Tone } from './store.svelte'
 
@@ -119,9 +120,19 @@ function minGate(v: V): number {
 }
 
 function preset(name: string, category: PresetCategory, notes: string, ...blocks: ((v: V) => void)[]): Tone {
+  return build(name, category, notes, blocks, true)
+}
+
+/** A player's own patch, exported from BOSS Tone Studio (presets-player.json holds its
+ *  differences from the base), used exactly as it was made. */
+function exported(name: keyof typeof PLAYER, category: PresetCategory, notes: string): Tone {
+  return build(name, category, notes, [(v) => Object.assign(v, PLAYER[name] as V)], false)
+}
+
+function build(name: string, category: PresetCategory, notes: string, blocks: ((v: V) => void)[], gateFloor: boolean): Tone {
   const v = presetBase()
   for (const b of blocks) b(v)
-  const floor = minGate(v)
+  const floor = gateFloor ? minGate(v) : 0
   if (floor && (!v['ns.sw'] || Number(v['ns.threshold']) < floor)) each(v, 'ns', { sw: 1, threshold: floor })
   put(v, 'com.name', name.replace(/[^\x20-\x7d]/g, ' ').slice(0, 16).padEnd(16, ' '))
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -134,10 +145,8 @@ function preset(name: string, category: PresetCategory, notes: string, ...blocks
 
 export const presets: Tone[] = [
   // ------------------------------------------------------------------ songs
-  preset('Sweet Child O\' Mine', 'Songs',
-    "Guns N' Roses (Slash): Les Paul into a hot-rodded Marshall, big mids and a lush plate. Neck pickup for the intro riff, bridge for the solos.",
-    amp({ type: 'Brown', gain: 67, bass: 68, middle: 69, treble: 62, presence: 48, volume: 30 }),
-    contour(1), reverb('PLATE', 50, 50, { density: 8 }), gate(30)),
+  exported("Sweet Child O' Mine", 'Songs',
+    "Guns N' Roses (Slash): a player's own patch. Brown amp with big mids, a lush plate and a cry wah on the Pedal FX (for an expression pedal). Neck pickup for the intro riff, bridge for the solos."),
   preset('Back in Black', 'Songs',
     'AC/DC: Gibson SG into a cranked Marshall, no pedals. Less gain than you think; dig in with the pick.',
     amp({ type: 'Crunch', gain: 55, bass: 62, middle: 66, treble: 52, presence: 40 }),
@@ -167,10 +176,8 @@ export const presets: Tone[] = [
     'Metallica: tight scooped thrash. A Metal Zone barely on tightens the low end; gate on for the stops.',
     amp({ type: 'Brown', gain: 68, bass: 72, middle: 35, treble: 62, presence: 40, pre: true, power: true }),
     boost('METAL ZONE', { drive: 4, bottom: 17, tone: -26, level: 53 }), contour(2), gate(45, 36)),
-  preset('Paranoid', 'Songs',
-    'Black Sabbath (Iommi): treble booster into a Laney turned all the way up. Thin bass, loud mids and top.',
-    amp({ type: 'Crunch', gain: 85, bass: 20, middle: 69, treble: 70, presence: 62, volume: 32 }),
-    boost('TREBLE BOOST', { drive: 11, bottom: -5, level: 56 }), contour(3), reverb('ROOM', 20, 40, { density: 3 }), gate(38)),
+  exported('Paranoid', 'Songs',
+    "Black Sabbath (Iommi): a player's own patch. Treble booster into a Crunch amp turned all the way up, thin bass and loud mids and top."),
   preset('Purple Haze', 'Songs',
     'Jimi Hendrix: Octavia fuzz (octave-up) into a Marshall. Neck pickup for the octave to really sing.',
     amp({ type: 'Crunch', gain: 48, bass: 62, middle: 62, treble: 48, presence: 38 }),
@@ -193,11 +200,8 @@ export const presets: Tone[] = [
     'Dire Straits (Knopfler): clean Strat in the neck+middle position, fingerpicked, lightly compressed.',
     amp({ type: 'Clean', gain: 42, bass: 60, middle: 52, treble: 60, presence: 50 }),
     mod('COMP', { type: 'BOSS COMP', sustain: 41, attack: 50, tone: 0, level: 38 }), reverb('ROOM', 25, 28)),
-  preset('Money for Nothing', 'Songs',
-    'Dire Straits (Knopfler): the "cocked wah" honk: no bass, a fixed band-pass filter and a big hall.',
-    amp({ type: 'Lead', gain: 60, bass: 5, middle: 70, treble: 72, presence: 40 }),
-    fx('T.WAH', { mode: 'BPF', polarity: 'UP', sens: 0, freq: 50, peak: 0, direct_mix: 0, effect_level: 50 }),
-    reverb('HALL', 40, 45, { high_cut: '3.15 kHz' }), gate(25)),
+  exported('Money for Nothing', 'Songs',
+    'Dire Straits (Knopfler): a player\'s own patch. The "cocked wah" honk: no bass, a fixed band-pass T.Wah and a big hall.'),
   preset('Every Breath You Take', 'Songs',
     'The Police (Summers): bright, compressed arpeggios with lush chorus and a short echo. Let every note ring.',
     amp({ type: 'Pushed', gain: 32, bass: 50, middle: 53, treble: 65, presence: 52, pre: true, volume: 55 }),
@@ -248,7 +252,22 @@ export const presets: Tone[] = [
     fx('PITCH SHIFTER', { voice: '1VOICE', pitch1: 12, fine1: 0, level1: 100, direct_mix: 0 }),
     (v) => put(v, 'sw.fx_sw', 0), contour(1), gate(45)),
 
+  exported('AWD Black Album', 'Songs',
+    "Metallica, Black Album era: a player's own patch. Metal Zone barely on into the Brown amp with both variations, huge bass, scooped mids, bright top."),
+  exported('Synyster Gates Lead', 'Songs',
+    "Avenged Sevenfold (Synyster Gates): a player's own patch. Saturated Brown lead, hi-band compressor for sustain, a 400 ms delay."),
+  exported('Message in a Bottle', 'Songs',
+    "The Police (Summers): a player's own patch. Bright pushed clean with chorus, compression, a short analog echo and hall."),
+  exported('One', 'Songs',
+    "A player's own patch: chimey clean with a treble booster, DC-30 chorus and plate reverb."),
+  exported('Everlong', 'Songs',
+    "Foo Fighters: a player's own patch. Crunch amp at 72 gain with full lows, no effects. Drop-D tuning."),
+
   // ------------------------------------------------------------------ clean
+  exported('Clean Guitar', 'Clean',
+    "A player's own clean: Clean amp, humbucker-to-single-coil Guitar Sim, plate reverb and a gentle parametric EQ."),
+  exported('Acoustic', 'Clean',
+    "A player's own acoustic: the Acoustic amp with the AC.Guitar Sim and a plate."),
   preset('Glassy Clean', 'Clean',
     'Sparkly studio clean: compressed, a little chorus and a hall. Great for arpeggios.',
     amp({ type: 'Clean', gain: 40, bass: 63, middle: 41, treble: 63, presence: 53, volume: 70 }),
@@ -271,6 +290,8 @@ export const presets: Tone[] = [
     delay('TAPE ECHO', 380, 25, 32), reverb('SPRING', 30, 30)),
 
   // ------------------------------------------------------------------ rock
+  exported('87', 'Rock',
+    "A player's own 80s rock patch: Brown amp with parametric EQs before and after it, a 400 ms digital delay and a hall."),
   preset('Classic Rock Lead', 'Rock',
     '70s/80s rock lead: a hot Marshall with a clean boost, tape echo and a hall.',
     amp({ type: 'Lead', gain: 61, bass: 65, middle: 60, treble: 52, presence: 27 }),
@@ -283,6 +304,12 @@ export const presets: Tone[] = [
     delay('DIGITAL', 420, 30, 35), reverb('PLATE', 40, 35), gate(40)),
 
   // ------------------------------------------------------------------ metal
+  exported('AWD Hi Gain', 'Metal',
+    "A player's own high-gain rhythm: Metal Zone barely on into the Brown amp with both variations, huge bass, scooped mids."),
+  exported('Zacky Vengeance', 'Metal',
+    "Avenged Sevenfold (Zacky Vengeance) rhythm: a player's own patch. Blues Driver push into a Brown amp, compressor, a touch of plate."),
+  exported('BFMV', 'Metal',
+    "Bullet for My Valentine: a player's own patch. Tube Screamer into a modern Brown with Solo on for leads, EQ 2 shaping after the amp."),
   preset('Modern Metal Rhythm', 'Metal',
     'Tight modern high gain: a Tube Screamer with almost no drive tightening a modern amp, with a firm gate.',
     amp({ type: 'Brown', gain: 62, bass: 58, middle: 58, treble: 62, presence: 50, pre: true, cab: 'MODERN' }),
