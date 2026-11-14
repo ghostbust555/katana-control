@@ -17,7 +17,10 @@ The whole amp state (patch, effects, knobs, system settings) is a flat address s
 1. Install Rust from https://rustup.rs (pick the MSVC toolchain; it asks for VS Build Tools).
 2. `cargo build --release` → `target\release\katana-control.exe`
 
-It also builds on Linux (needs `libasound2-dev`).
+Or cross-compile on Linux with `./build-windows.sh` (Zig as the linker, no sudo; one-time setup is
+in the script). The result is a single `katana-control.exe` that needs only stock Windows DLLs.
+
+It also builds and runs natively on Linux (needs `libasound2-dev`).
 
 ## Commands
 
