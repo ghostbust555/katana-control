@@ -101,9 +101,28 @@ const reverb = (type: string, time = 30, level = 35, extra: Record<string, Value
 /** Noise suppressor: 15 suits clean and crunch; high gain needs 35-55. */
 const gate = (threshold: number, release = 50) => (v: V) => each(v, 'ns', { sw: 1, threshold, release })
 
+/** Boosters that are the distortion themselves rather than a push into the amp. */
+const DIRTY = new Set(['MUFF FUZZ', "'60S FUZZ", 'OCT FUZZ', 'HM-2', 'DISTORTION', 'DST+', 'RAT', 'METAL ZONE', 'GUV DS', 'FAT DS', 'METAL DS', 'METAL CORE'])
+const optionOf = (v: V, id: string) => { const p = byId.get(id)!; return p.options![Number(v[id]) - p.min] }
+/** Lowest noise suppressor threshold for how driven a tone is: high gain hisses and hums
+ *  between notes, so it gets a firmer gate than BOSS's 15 for cleans. A preset can go higher. */
+function minGate(v: V): number {
+  const type = optionOf(v, 'amp.type')
+  const gain = Number(v['amp.gain'])
+  const boosted = !!v['sw.booster_sw']
+  const booster = optionOf(v, 'booster1.type')
+  if (type === 'Brown' || type === 'Lead') return 35
+  if (boosted && DIRTY.has(booster)) return booster.includes('FUZZ') ? 25 : 30
+  if (type === 'Crunch' && gain >= 50) return 30
+  if ((type === 'Crunch' && gain >= 40) || (type === 'Pushed' && gain >= 55) || boosted) return 20
+  return 0
+}
+
 function preset(name: string, category: PresetCategory, notes: string, ...blocks: ((v: V) => void)[]): Tone {
   const v = presetBase()
   for (const b of blocks) b(v)
+  const floor = minGate(v)
+  if (floor && (!v['ns.sw'] || Number(v['ns.threshold']) < floor)) each(v, 'ns', { sw: 1, threshold: floor })
   put(v, 'com.name', name.replace(/[^\x20-\x7d]/g, ' ').slice(0, 16).padEnd(16, ' '))
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
   return {
@@ -151,7 +170,7 @@ export const presets: Tone[] = [
   preset('Paranoid', 'Songs',
     'Black Sabbath (Iommi): treble booster into a Laney turned all the way up. Thin bass, loud mids and top.',
     amp({ type: 'Crunch', gain: 85, bass: 20, middle: 69, treble: 70, presence: 62, volume: 32 }),
-    boost('TREBLE BOOST', { drive: 11, bottom: -5, level: 56 }), contour(3), reverb('ROOM', 20, 40, { density: 3 }), gate(25)),
+    boost('TREBLE BOOST', { drive: 11, bottom: -5, level: 56 }), contour(3), reverb('ROOM', 20, 40, { density: 3 }), gate(38)),
   preset('Purple Haze', 'Songs',
     'Jimi Hendrix: Octavia fuzz (octave-up) into a Marshall. Neck pickup for the octave to really sing.',
     amp({ type: 'Crunch', gain: 48, bass: 62, middle: 62, treble: 48, presence: 38 }),
