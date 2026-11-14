@@ -1,5 +1,7 @@
 <script lang="ts">
-  import Picker from '../components/Picker.svelte'
+  import Choices from '../components/Choices.svelte'
+  import Popover from '../components/Popover.svelte'
+  import { pressAt, type Point } from '../lib/press'
   import { channels } from '../lib/schema'
   import { store, type Song } from '../lib/store.svelte'
 
@@ -7,7 +9,9 @@
   const list = $derived(store.setlists.find((x) => x.id === selectedId) ?? null)
   let editing = $state(false)
   /** Song + channel whose tone is being chosen in edit mode. */
-  let picking = $state<{ song: Song; key: string } | null>(null)
+  let picking = $state<{ song: Song; key: string; at: Point } | null>(null)
+  /** Song whose menu (rename / move / remove) is open. */
+  let songMenu = $state<{ i: number; at: Point } | null>(null)
 
   const liveIndex = $derived(list && store.liveSong?.setlistId === list.id ? list.songs.findIndex((s) => s.id === store.liveSong!.songId) : -1)
   const pickTones = $derived([...store.tones].sort((a, b) => a.name.localeCompare(b.name)))
@@ -37,7 +41,7 @@
 
   // Page-turner pedals and keyboards: PageDown / → / Space = next song, PageUp / ← = previous.
   function keys(e: KeyboardEvent) {
-    if (editing || picking || store.ask || store.confirm) return
+    if (editing || picking || songMenu || store.ask || store.confirm) return
     if (e.target instanceof HTMLInputElement && e.target.type !== 'range') return
     if (['PageDown', 'ArrowRight', ' '].includes(e.key)) { e.preventDefault(); step(1) }
     else if (['PageUp', 'ArrowLeft'].includes(e.key)) { e.preventDefault(); step(-1) }
@@ -74,18 +78,13 @@
       <div class="songs scroll">
         {#each list.songs as song, i (song.id)}
           <div class="erow">
-            <div class="row">
-              <span class="num">{i + 1}</span>
-              <input type="text" class="grow" aria-label="Song name" value={song.name}
-                oninput={(e) => { song.name = e.currentTarget.value; store.persistSetlists() }} />
-              <button class="icon" aria-label="Move up" disabled={i === 0} onclick={() => move(i, -1)}>▲</button>
-              <button class="icon" aria-label="Move down" disabled={i === list.songs.length - 1} onclick={() => move(i, 1)}>▼</button>
-              <button class="icon danger" aria-label="Remove song" onclick={() => remove(i)}>✕</button>
-            </div>
+            <button class="sbtn" onclick={(e) => (songMenu = { i, at: pressAt(e) })}>
+              <span class="num">{i + 1}</span><b class="grow sn">{song.name}</b><span class="dim">⋯</span>
+            </button>
             <div class="chans">
               {#each channels as c (c.key)}
                 {@const n = toneName(song.channels[c.key])}
-                <button class="chan" class:none={!n} onclick={() => (picking = { song, key: c.key })}>
+                <button class="chan" class:none={!n} onclick={(e) => (picking = { song, key: c.key, at: pressAt(e) })}>
                   <span class="ck">{c.key}</span><span class="tn">{n ?? 'Keep'}</span>
                 </button>
               {/each}
@@ -139,10 +138,28 @@
 
 {#if picking}
   {@const p = picking}
-  <Picker title="{p.song.name}: tone for {p.key}" options={['Keep what\'s on the amp', ...pickTones.map((t) => t.name)]}
-    value={p.song.channels[p.key] ? pickTones.findIndex((t) => t.id === p.song.channels[p.key]) + 1 : 0}
-    onpick={(i) => { p.song.channels[p.key] = i === 0 ? null : pickTones[i - 1].id; store.persistSetlists(); picking = null }}
-    onclose={() => (picking = null)} />
+  <Popover at={p.at} onclose={() => (picking = null)} width={560}>
+    <b>{p.song.name}: tone for {p.key}</b>
+    <Choices options={["Keep what's on the amp", ...pickTones.map((t) => t.name)]}
+      value={p.song.channels[p.key] ? pickTones.findIndex((t) => t.id === p.song.channels[p.key]) + 1 : 0}
+      onpick={(i) => { p.song.channels[p.key] = i === 0 ? null : pickTones[i - 1].id; store.persistSetlists() }} />
+  </Popover>
+{/if}
+
+{#if songMenu && list}
+  {@const i = songMenu.i}
+  {@const song = list.songs[i]}
+  {#if song}
+    <Popover at={songMenu.at} onclose={() => (songMenu = null)} width={380}>
+      <input type="text" aria-label="Song name" value={song.name}
+        oninput={(e) => { song.name = e.currentTarget.value; store.persistSetlists() }} />
+      <div class="macts">
+        <button disabled={i === 0} onclick={() => { move(i, -1); songMenu = { ...songMenu!, i: i - 1 } }}>▲ Up</button>
+        <button disabled={i === list.songs.length - 1} onclick={() => { move(i, 1); songMenu = { ...songMenu!, i: i + 1 } }}>▼ Down</button>
+        <button class="danger" onclick={() => { remove(i); songMenu = null }}>Remove</button>
+      </div>
+    </Popover>
+  {/if}
 {/if}
 
 <style>
@@ -159,11 +176,13 @@
   .title-ro { font-size: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .songs { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
   .num { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--bg); border: 1px solid var(--line); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .icon { width: var(--tap); padding: 0; flex: none; }
 
   /* edit mode */
   .erow { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; display: flex; flex-direction: column; gap: 8px; flex: none; }
   .chans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .sbtn { display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; border-color: transparent; padding: 0 6px; }
+  .sn { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .macts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .chan { display: flex; gap: 8px; align-items: center; padding: 0 10px; text-align: left; background: var(--bg); min-width: 0; }
   .chan.none .tn { color: var(--dim); font-style: italic; }
   .ck { font-weight: 700; color: var(--accent); flex: none; }

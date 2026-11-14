@@ -1,5 +1,7 @@
 <script lang="ts">
   import { backend } from './lib/backend'
+  import Popover from './components/Popover.svelte'
+  import { pressAt, type Point } from './lib/press'
   import { channels } from './lib/schema'
   import { PATCH_NAMES, store, type View } from './lib/store.svelte'
   import Editor from './views/Editor.svelte'
@@ -17,8 +19,10 @@
     { view: 'community', label: 'Community', icon: 'M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18' },
   ]
 
-  let guitarMenu = $state(false)
-  let channelMenu = $state(false)
+  // Top-bar popovers: where each was opened, or null when closed.
+  let guitarMenu = $state<Point | null>(null)
+  let channelMenu = $state<Point | null>(null)
+  let moreMenu = $state<Point | null>(null)
   const chName = (n: number) => PATCH_NAMES[n] ?? `Patch ${n}`
   function syncInfo() {
     if (store.synced) {
@@ -84,14 +88,14 @@
       <button class="ghost icon ur" title="Undo (Ctrl+Z)" disabled={!store.undoStack.length} onclick={() => store.undo()}>↶</button>
       <button class="ghost icon ur" title="Redo (Ctrl+Y)" disabled={!store.redoStack.length} onclick={() => store.redo()}>↷</button>
       <button class="primary" onclick={save} title="Ctrl+S">Save</button>
-      <details class="menu">
-        <summary>More ▾</summary>
-        <div class="menu-list" role="menu">
-          <button onclick={saveAs}>Save as new…</button>
-          <button onclick={() => store.newTone()}>New tone</button>
-          <button disabled={!store.dirty} onclick={() => store.revert()}>Revert changes</button>
-        </div>
-      </details>
+      <button onclick={(e) => (moreMenu = pressAt(e))}>More ▾</button>
+      {#if moreMenu}
+        <Popover at={moreMenu} onclose={() => (moreMenu = null)} width={260}>
+          <button class="item" onclick={() => { moreMenu = null; saveAs() }}>Save as new…</button>
+          <button class="item" onclick={() => { moreMenu = null; store.newTone() }}>New tone</button>
+          <button class="item" disabled={!store.dirty} onclick={() => { moreMenu = null; store.revert() }}>Revert changes</button>
+        </Popover>
+      {/if}
 
       <button class="icon arrow" title="Load from amp: replace the editor tone with the amp's current sound"
         aria-label="Load from amp" disabled={!store.amp.connected || !!store.amp.busy} onclick={() => store.pullFromAmp()}>
@@ -120,39 +124,36 @@
       {#if store.amp.busy}<span class="busy"><span class="spin"></span>{store.amp.busy}</span>{/if}
 
       {#if store.amp.connected}
-        <span class="anchor">
-          <button class="chip-btn chan" onclick={() => { channelMenu = !channelMenu; guitarMenu = false }} title="Channel the amp is on: tap to switch">
-            {#if store.channel !== null}
-              <b>{chName(store.channel)}</b><span class="cname">{store.channelTone(store.channel) ?? ''}</span>
-            {:else}<span class="dim">Channel ?</span>{/if}
-            <span class="dim">▾</span>
-          </button>
-          {#if channelMenu}
-            <div class="gmenu cmenu" role="menu">
-              {#each channels as c (c.key)}
-                <button class:sel={store.channel === c.patch} disabled={!!store.amp.busy}
-                  onclick={() => { channelMenu = false; store.selectChannel(c.key) }}>
-                  <b>{c.key}</b> <span class="dim">{store.channelTone(c.patch) ?? 'Unknown tone'}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </span>
-      {/if}
-      <span class="anchor">
-        <button class="chip-btn" onclick={() => { guitarMenu = !guitarMenu; channelMenu = false }} title="Active guitar">
-          🎸 {store.activeGuitar?.name ?? 'No guitar'} ▾
+        <button class="chip-btn chan" onclick={(e) => (channelMenu = pressAt(e))} title="Channel the amp is on: tap to switch">
+          {#if store.channel !== null}
+            <b>{chName(store.channel)}</b><span class="cname">{store.channelTone(store.channel) ?? ''}</span>
+          {:else}<span class="dim">Channel ?</span>{/if}
+          <span class="dim">▾</span>
         </button>
-        {#if guitarMenu}
-          <div class="gmenu" role="menu">
-            <button class:sel={!store.activeGuitarId} onclick={() => { store.setActiveGuitar(null); guitarMenu = false }}>No guitar</button>
-            {#each store.guitars as g (g.id)}
-              <button class:sel={store.activeGuitarId === g.id} onclick={() => { store.setActiveGuitar(g.id); guitarMenu = false }}>{g.name}</button>
-            {/each}
-            <button class="ghost" onclick={() => { store.view = 'guitars'; guitarMenu = false }}>Manage guitars…</button>
-          </div>
-        {/if}
-      </span>
+      {/if}
+      <button class="chip-btn" onclick={(e) => (guitarMenu = pressAt(e))} title="Active guitar">
+        🎸 {store.activeGuitar?.name ?? 'No guitar'} ▾
+      </button>
+      {#if channelMenu}
+        <Popover at={channelMenu} onclose={() => (channelMenu = null)} width={300}>
+          <b>Amp channel</b>
+          {#each channels as c (c.key)}
+            <button class="item" class:sel={store.channel === c.patch} disabled={!!store.amp.busy} onclick={() => store.selectChannel(c.key)}>
+              <b class="ck">{c.key}</b> <span class="dim">{store.channelTone(c.patch) ?? 'Unknown tone'}</span>
+            </button>
+          {/each}
+        </Popover>
+      {/if}
+      {#if guitarMenu}
+        <Popover at={guitarMenu} onclose={() => (guitarMenu = null)} width={280}>
+          <b>Guitar</b>
+          <button class="item" class:sel={!store.activeGuitarId} onclick={() => store.setActiveGuitar(null)}>No guitar</button>
+          {#each store.guitars as g (g.id)}
+            <button class="item" class:sel={store.activeGuitarId === g.id} onclick={() => store.setActiveGuitar(g.id)}>{g.name}</button>
+          {/each}
+          <button class="item ghost" onclick={() => { store.view = 'guitars'; guitarMenu = null }}>Manage guitars…</button>
+        </Popover>
+      {/if}
       {#if store.amp.connected}
         <button class="ghost conn on dotonly" onclick={() => store.disconnect()}
           title="Connected to {store.amp.port}{backend.mock ? ' (demo)' : ''}: tap to disconnect" aria-label="Connected: tap to disconnect">
@@ -222,28 +223,20 @@
   .sync { width: 40px; display: grid; place-items: center; padding: 0; color: var(--warn, #e8a33d); border-color: color-mix(in srgb, currentColor 45%, transparent); }
   .sync.live { color: var(--ok); }
   .sync svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .menu { position: relative; }
-  .menu summary { list-style: none; min-height: var(--tap); display: flex; align-items: center; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
-  .menu summary::-webkit-details-marker { display: none; }
-  .menu-list { position: absolute; top: 50px; left: 0; z-index: 30; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 220px; box-shadow: 0 10px 30px #0008; }
-  .menu-list button { text-align: left; border-color: transparent; background: transparent; }
-  .menu-list button:hover:not(:disabled) { background: var(--panel2); }
   .chip-btn { border-radius: 22px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .conn { display: flex; align-items: center; gap: 8px; }
   .dotonly { width: 28px; padding: 0; justify-content: center; }
   .chan { display: flex; align-items: center; gap: 8px; max-width: 280px; }
   .chan b { color: var(--accent); }
+  .item { text-align: left; }
+  .item.sel { border-color: var(--accent); background: #2c2518; }
+  .ck { color: var(--accent); margin-right: 6px; }
   .cname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .cmenu b { color: var(--accent); margin-right: 6px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
   .conn.on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
   .busy { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 14px; }
   .spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .anchor { position: relative; display: flex; }
-  .gmenu { position: absolute; top: 52px; right: 0; z-index: 30; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 240px; box-shadow: 0 10px 30px #0008; }
-  .gmenu button { text-align: left; }
-  .gmenu .sel { border-color: var(--accent); }
   .view { flex: 1; min-height: 0; }
   .toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 60; pointer-events: none; }
   .toast { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; box-shadow: 0 6px 20px #0008; max-width: 70vw; }

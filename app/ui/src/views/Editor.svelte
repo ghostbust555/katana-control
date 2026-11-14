@@ -1,8 +1,10 @@
 <script lang="ts">
+  import Choices from '../components/Choices.svelte'
   import ParamControl from '../components/ParamControl.svelte'
-  import Picker from '../components/Picker.svelte'
+  import Popover from '../components/Popover.svelte'
   import Toggle from '../components/Toggle.svelte'
-  import { COLOR_CSS, format, layout, param, variationIndex, visibleGroups } from '../lib/schema'
+  import { pressAt, type Point } from '../lib/press'
+  import { COLOR_CSS, format, isNumeric, layout, param, variationIndex, visibleGroups } from '../lib/schema'
   import { store } from '../lib/store.svelte'
 
   const values = $derived(store.tone.params)
@@ -14,7 +16,23 @@
   // For MOD/FX the first group is the effect type; show it as a big picker in the header.
   const typeParam = $derived(groups[0]?.label === 'Type' ? param(groups[0].params[0]) : null)
   const bodyGroups = $derived(typeParam ? groups.slice(1) : groups)
-  let pickingType = $state(false)
+  let typeAt = $state<Point | null>(null)
+
+  /** A group's params as tiles; an `x_sw` switch followed by its `x_…` number becomes one
+   *  paired tile (toggle + control). */
+  function tiles(ids: string[]) {
+    const out: { id: string; sw?: string }[] = []
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i]
+      const next = ids[i + 1]
+      const stem = id.endsWith('_sw') ? id.slice(0, -2) : null
+      if (stem && next?.startsWith(stem) && param(id).switch && isNumeric(param(next))) {
+        out.push({ id: next, sw: id })
+        i++
+      } else out.push({ id })
+    }
+    return out
+  }
 
   const isOn = (key: string) => {
     const b = layout.find((x) => x.key === key)!
@@ -32,14 +50,19 @@
 <div class="editor">
   <nav class="chain scroll-x" aria-label="Signal chain">
     {#each layout as b (b.key)}
-      <button class="tile" class:sel={b.key === store.block} class:off={!isOn(b.key)} onclick={() => (store.block = b.key)}>
-        <span class="row tile-top">
-          {#if b.switch}<span class="led" class:lit={isOn(b.key)}></span>{/if}
-          <span class="name">{b.label}</span>
-          {#if b.color}<span class="pip" style="background:{COLOR_CSS[variationIndex(b, values)]}"></span>{/if}
-        </span>
-        <span class="sub">{subtitle(b.key)}</span>
-      </button>
+      <div class="tile" class:sel={b.key === store.block} class:off={!isOn(b.key)}>
+        {#if b.switch}
+          <button class="led-btn" role="switch" aria-checked={isOn(b.key)} aria-label="{b.label} on/off"
+            onclick={() => store.setParam(b.switch!, isOn(b.key) ? 0 : 1)}><span class="led" class:lit={isOn(b.key)}></span></button>
+        {/if}
+        <button class="tile-body" onclick={() => (store.block = b.key)}>
+          <span class="row tile-top">
+            <span class="name">{b.label}</span>
+            {#if b.color}<span class="pip" style="background:{COLOR_CSS[variationIndex(b, values)]}"></span>{/if}
+          </span>
+          <span class="sub">{subtitle(b.key)}</span>
+        </button>
+      </div>
     {/each}
   </nav>
 
@@ -58,12 +81,15 @@
         </div>
       {/if}
       {#if typeParam}
-        <button class="type" onclick={() => (pickingType = true)}>
+        <button class="type" onclick={(e) => (typeAt = pressAt(e))}>
           <span class="dim">Type</span> <b>{format(typeParam, values[typeParam.id])}</b> <span class="dim">▾</span>
         </button>
-        {#if pickingType}
-          <Picker title="{block.label} type" options={typeParam.options!} value={Number(values[typeParam.id])}
-            onpick={(i) => { store.setParam(typeParam.id, i); pickingType = false }} onclose={() => (pickingType = false)} />
+        {#if typeAt}
+          <Popover at={typeAt} onclose={() => (typeAt = null)} width={560}>
+            <b>{block.label} type</b>
+            <Choices options={typeParam.options!} value={Number(values[typeParam.id]) - typeParam.min}
+              onpick={(i) => store.setParam(typeParam.id, typeParam.min + i)} />
+          </Popover>
         {/if}
       {/if}
     </header>
@@ -72,10 +98,11 @@
       {#each bodyGroups as g (g.label)}
         {#if bodyGroups.length > 1 || g.label !== block.label}<h3 class="glabel">{g.label}</h3>{/if}
         <div class="grid">
-          {#each g.params as id (id)}
-            {@const p = param(id)}
-            <ParamControl {p} value={values[id]} onchange={(v) => store.setParam(id, v)}
-              effective={deltas[id] ? store.effective(id) : undefined} />
+          {#each tiles(g.params) as t (t.id)}
+            {@const sw = t.sw}
+            <ParamControl p={param(t.id)} value={values[t.id]} onchange={(v) => store.setParam(t.id, v)}
+              effective={deltas[t.id] ? store.effective(t.id) : undefined}
+              toggle={sw ? { p: param(sw), value: values[sw], onchange: (v) => store.setParam(sw, v) } : undefined} />
           {/each}
         </div>
       {/each}
@@ -86,13 +113,15 @@
 <style>
   .editor { display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 16px 16px; }
   .chain { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; flex: none; scrollbar-width: thin; }
-  .tile { flex: none; width: 128px; height: 68px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 6px 10px; text-align: left; }
+  .tile { flex: none; width: 140px; height: 68px; display: flex; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); overflow: hidden; }
   .tile.sel { border-color: var(--accent); background: #2c2518; }
+  .led-btn { width: 34px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: #0002; flex: none; }
+  .tile-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 6px 10px; text-align: left; border: 0; border-radius: 0; background: transparent; }
   .tile.off .name { color: var(--dim); }
   .tile-top { gap: 7px; width: 100%; }
   .name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .sub { font-size: 12px; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  .led { width: 10px; height: 10px; border-radius: 50%; background: #3a3f48; flex: none; }
+  .led { width: 12px; height: 12px; border-radius: 50%; background: #3a3f48; flex: none; }
   .led.lit { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
   .pip { width: 4px; height: 18px; border-radius: 2px; flex: none; }
 
@@ -106,5 +135,5 @@
   .body { flex: 1; min-height: 0; padding: 12px 16px 20px; }
   .glabel { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin: 14px 0 8px; }
   .glabel:first-child { margin-top: 0; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
 </style>

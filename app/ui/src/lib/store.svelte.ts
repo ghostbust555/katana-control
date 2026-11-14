@@ -397,6 +397,20 @@ class Store {
     await backend.saveTone($state.snapshot(t))
   }
 
+  /** Rename a library tone (and its patch name). The editor follows if it has that tone open. */
+  async renameTone(t: Tone, name: string) {
+    t.name = name
+    t.params['com.name'] = ampName(name)
+    await this.updateTone(t)
+    if (this.tone.id === t.id) {
+      this.tone.name = name
+      this.tone.params['com.name'] = ampName(name)
+      const saved = JSON.parse(this.saved)
+      saved['com.name'] = ampName(name)
+      this.saved = JSON.stringify(saved)
+    }
+  }
+
   // ---------------------------------------------------------------- amp
 
   async connect(quiet = false) {

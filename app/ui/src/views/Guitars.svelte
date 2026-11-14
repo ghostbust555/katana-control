@@ -1,4 +1,8 @@
 <script lang="ts">
+  import Choices from '../components/Choices.svelte'
+  import Popover from '../components/Popover.svelte'
+  import Stepper from '../components/Stepper.svelte'
+  import { pressAt, type Point } from '../lib/press'
   import { format, isNumeric, param, writable } from '../lib/schema'
   import { store, type Guitar } from '../lib/store.svelte'
 
@@ -19,8 +23,11 @@
 
   let selectedId = $state<string | null>(store.activeGuitarId ?? store.guitars[0]?.id ?? null)
   const g = $derived(store.guitars.find((x) => x.id === selectedId) ?? null)
-  let adding = $state(false)
+  let addAt = $state<Point | null>(null)
   let filter = $state('')
+  /** Open adjustment popover: the row (label + params it drives) and where it was pressed. */
+  let editing = $state<{ label: string; ids: string[]; at: Point } | null>(null)
+  let pickupAt = $state<Point | null>(null)
 
   const extraIds = $derived(g ? Object.keys(g.deltas).filter((id) => !presetIds.has(id)) : [])
   const candidates = $derived(
@@ -74,32 +81,22 @@
         </button>
         <button class="danger" onclick={() => store.deleteGuitar(g)}>Delete</button>
       </div>
-      <div class="seg" role="radiogroup" aria-label="Pickups">
-        {#each PICKUPS as [k, label]}
-          <button role="radio" aria-checked={g.pickups === k} class:sel={g.pickups === k} onclick={() => { g.pickups = k; store.updateGuitar() }}>{label}</button>
-        {/each}
-      </div>
+      <button class="tile pick" onclick={(e) => (pickupAt = pressAt(e))}>
+        <span class="dim small">Pickups</span><b>{PICKUPS.find(([k]) => k === g.pickups)?.[1]}</b><span class="dim">▾</span>
+      </button>
 
       <h3 class="glabel">Adjustments <span class="dim">· current tone "{store.tone.name}" → what the amp gets</span></h3>
-      <div class="rows">
+      <div class="tiles">
         {#each [...PRESETS, ...extraIds.map((id) => ({ label: pretty(id), ids: [id] }))] as row (row.label)}
           {@const d = g.deltas[row.ids[0]] ?? 0}
-          {@const r = range(row.ids[0])}
           {@const p = param(row.ids[0])}
-          {@const pos = ((d + r) / (2 * r)) * 100}
-          <div class="drow">
-            <span class="dl">{row.label}</span>
-            <button class="step" onclick={() => setDelta(row.ids, Math.max(-r, d - 1))}>−</button>
-            <input type="range" class="center" min={-r} max={r} value={d} aria-label="{row.label} adjustment"
-              style="--lo:{Math.min(50, pos)}%; --hi:{Math.max(50, pos)}%" oninput={(e) => setDelta(row.ids, +e.currentTarget.value)} />
-            <button class="step" onclick={() => setDelta(row.ids, Math.min(r, d + 1))}>+</button>
-            <span class="dv" class:zero={d === 0}>{d > 0 ? '+' : ''}{d}</span>
+          <button class="tile" class:set={d !== 0} onclick={(e) => (editing = { ...row, at: pressAt(e) })}>
+            <span class="row"><span class="dim small grow tl">{row.label}</span><b class="dv" class:zero={d === 0}>{d > 0 ? '+' : ''}{d}</b></span>
             <span class="prev dim">{format(p, store.tone.params[p.id])} → <b class:changed={d !== 0}>{format(p, Math.min(p.max, Math.max(p.min, Number(store.tone.params[p.id]) + d)))}</b></span>
-            <button class="ghost reset" disabled={d === 0} onclick={() => setDelta(row.ids, 0)}>Reset</button>
-          </div>
+          </button>
         {/each}
+        <button class="tile add" onclick={(e) => (addAt = pressAt(e))}>+ Add another parameter</button>
       </div>
-      <button onclick={() => (adding = true)}>Add another parameter…</button>
     {:else}
       <div class="empty">
         <p class="dim">Add a guitar to store how its sound differs, e.g. a Strat with single coils might want +12 gain and −6 treble compared to the tones you made on a humbucker guitar.</p>
@@ -109,18 +106,39 @@
   </section>
 </div>
 
-{#if adding && g}
-  <div class="backdrop" role="presentation" onclick={() => (adding = false)}>
-    <div class="sheet" role="dialog" aria-label="Add parameter" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-      <div class="row"><h2 class="grow">Add a parameter</h2><button class="ghost" onclick={() => (adding = false)}>Close</button></div>
-      <input type="search" placeholder="Search, e.g. reverb level" bind:value={filter} />
-      <div class="cands scroll">
-        {#each candidates as p (p.id)}
-          <button onclick={() => { setDelta([p.id], 1); adding = false; filter = '' }}>{pretty(p.id)}</button>
-        {/each}
-      </div>
+{#if editing && g}
+  {@const row = editing}
+  {@const d = g.deltas[row.ids[0]] ?? 0}
+  {@const r = range(row.ids[0])}
+  {@const p = param(row.ids[0])}
+  <Popover at={row.at} onclose={() => (editing = null)} width={420}>
+    <div class="row"><b class="grow">{row.label}</b><b class="big" class:zero={d === 0}>{d > 0 ? '+' : ''}{d}</b></div>
+    <Stepper value={d} min={-r} max={r} label="{row.label} adjustment" centered onchange={(v) => setDelta(row.ids, v)} />
+    <div class="row">
+      <span class="dim small grow">"{store.tone.name}": {format(p, store.tone.params[p.id])} → {format(p, Math.min(p.max, Math.max(p.min, Number(store.tone.params[p.id]) + d)))}</span>
+      <button class="ghost" disabled={d === 0} onclick={() => setDelta(row.ids, 0)}>Reset to 0</button>
     </div>
-  </div>
+  </Popover>
+{/if}
+
+{#if pickupAt && g}
+  <Popover at={pickupAt} onclose={() => (pickupAt = null)} width={340}>
+    <b>Pickups</b>
+    <Choices options={PICKUPS.map(([, l]) => l)} value={PICKUPS.findIndex(([k]) => k === g.pickups)}
+      onpick={(i) => { g.pickups = PICKUPS[i][0]; store.updateGuitar() }} />
+  </Popover>
+{/if}
+
+{#if addAt && g}
+  <Popover at={addAt} onclose={() => { addAt = null; filter = '' }} width={560}>
+    <b>Add a parameter</b>
+    <input type="search" placeholder="Search, e.g. reverb level" bind:value={filter} />
+    <div class="cands">
+      {#each candidates as p (p.id)}
+        <button onclick={(e) => { setDelta([p.id], 1); addAt = null; filter = ''; editing = { label: pretty(p.id), ids: [p.id], at: pressAt(e) } }}>{pretty(p.id)}</button>
+      {/each}
+    </div>
+  </Popover>
 {/if}
 
 <style>
@@ -137,27 +155,22 @@
   .hint { margin-top: auto; }
   .edit { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
   .head input { flex: 1; font-size: 20px; font-weight: 600; }
-  .seg { display: flex; gap: 6px; }
-  .seg button { flex: 1; }
-  .seg .sel { background: var(--accent); border-color: var(--accent); color: #1a1206; font-weight: 600; }
   .glabel { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin-top: 6px; }
   .glabel .dim { text-transform: none; letter-spacing: 0; }
-  .rows { display: flex; flex-direction: column; gap: 6px; }
-  .drow { display: grid; grid-template-columns: 170px var(--tap) 1fr var(--tap) 48px 150px 72px; align-items: center; gap: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 8px; }
-  .dl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .step { padding: 0; font-size: 22px; }
   .dv { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
   .dv.zero { color: var(--dim); font-weight: 400; }
-  .prev { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .prev .changed { color: var(--text); }
-  .reset { padding: 0 8px; }
-  /* Adjustment sliders fill outward from the centre (0). */
-  .center::-webkit-slider-runnable-track {
-    background: linear-gradient(to right, var(--line) var(--lo), var(--accent) var(--lo), var(--accent) var(--hi), var(--line) var(--hi));
-  }
   .empty { margin: auto; max-width: 460px; text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center; }
-  .backdrop { position: fixed; inset: 0; background: #0009; display: grid; place-items: center; z-index: 50; }
-  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; width: min(720px, 94vw); height: min(640px, 86vh); }
-  .cands { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .tile { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 4px; min-height: 64px; padding: 6px 12px; text-align: left; }
+  .tile.set { border-color: var(--accent-dim); }
+  .tile.add { align-items: center; border-style: dashed; color: var(--dim); }
+  .tile.pick { flex-direction: row; align-items: center; gap: 10px; align-self: flex-start; min-width: 260px; }
+  .tile.pick b { flex: 1; }
+  .tl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prev { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .big { font-size: 26px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .big.zero { color: var(--dim); }
+  .cands { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; max-height: 50vh; overflow-y: auto; }
   .cands button { text-align: left; white-space: normal; }
 </style>
