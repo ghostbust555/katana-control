@@ -164,7 +164,7 @@
 
 <style>
   .setlists { display: grid; grid-template-columns: 260px 1fr; gap: 12px; height: 100%; padding: 12px 16px 16px; }
-  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; overscroll-behavior-x: none; touch-action: pan-y; }
   .item { display: flex; align-items: center; gap: 8px; min-height: 56px; text-align: left; }
   .item.open { border-color: var(--accent); background: #2c2518; }
   .name { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }

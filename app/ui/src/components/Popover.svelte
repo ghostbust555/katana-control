@@ -39,7 +39,7 @@
 <style>
   .scrim { position: fixed; inset: 0; z-index: 70; background: #0005; }
   .pop {
-    position: fixed; z-index: 71; max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain;
+    position: fixed; z-index: 71; max-height: calc(100vh - 16px); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; overscroll-behavior-x: none; touch-action: pan-y;
     background: var(--panel); border: 1px solid #4a505b; border-radius: 16px; padding: 16px;
     box-shadow: 0 14px 40px #000a; display: flex; flex-direction: column; gap: 12px; font-size: 17px;
   }

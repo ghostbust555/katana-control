@@ -143,7 +143,7 @@
 
 <style>
   .guitars { display: grid; grid-template-columns: 300px 1fr; gap: 12px; height: 100%; padding: 12px 16px 16px; }
-  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; overscroll-behavior-x: none; touch-action: pan-y; }
   .item { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); padding: 0 6px; min-height: 56px; text-align: left; }
   .item.open { border-color: var(--accent); }
   .name { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; padding: 6px 4px; }
@@ -171,6 +171,6 @@
   .prev { font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .big { font-size: 26px; color: var(--accent); font-variant-numeric: tabular-nums; }
   .big.zero { color: var(--dim); }
-  .cands { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; max-height: 50vh; overflow-y: auto; }
+  .cands { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; max-height: 50vh; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; overscroll-behavior-x: none; touch-action: pan-y; }
   .cands button { text-align: left; white-space: normal; }
 </style>

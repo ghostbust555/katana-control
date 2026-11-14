@@ -117,7 +117,7 @@
 
 <style>
   .editor { display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 16px 16px; }
-  .chain { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; flex: none; scrollbar-width: thin; }
+  .chain { display: flex; gap: 8px; padding-bottom: 4px; flex: none; scrollbar-width: thin; }
   .tile { flex: none; width: 140px; height: 68px; display: flex; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); overflow: hidden; }
   .tile.sel { border-color: var(--accent); background: #2c2518; }
   .led-btn { width: 34px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: #0002; flex: none; }
