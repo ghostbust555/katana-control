@@ -19,6 +19,8 @@ const REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 
 const CMD_EDITOR_LEVEL: [u8; 4] = [0x7F, 0, 0, 0];
 const CMD_EDITOR_MODE: [u8; 4] = [0x7F, 0, 0, 1];
+/// CURRENT_PATCH_NUMBER (INTEGER2x7); the amp also sends it by itself when the patch changes.
+const CMD_CURRENT_PATCH: [u8; 4] = [0, 0, 0, 0];
 const CMD_PATCH_SELECT: [u8; 4] = [0x7F, 0, 1, 0];
 const CMD_PATCH_WRITE: [u8; 4] = [0x7F, 0, 1, 4];
 
@@ -48,6 +50,7 @@ enum Cmd {
     WritePatch(BTreeMap<String, Value>, Reply<()>),
     WriteChannel(u8, BTreeMap<String, Value>, Reply<()>),
     SelectPatch(u8, Reply<()>),
+    CurrentPatch(Reply<u16>),
     Close,
 }
 
@@ -114,6 +117,11 @@ impl Session {
     /// Replace the amp's current patch (not saved to a channel).
     pub fn write_patch(&self, values: BTreeMap<String, Value>) -> Result<()> {
         self.call(|r| Cmd::WritePatch(values, r), Duration::from_secs(60))
+    }
+
+    /// Which stored patch the amp is on (0 = PANEL, 1 = A1 ... 8 = B4).
+    pub fn current_patch(&self) -> Result<u16> {
+        self.call(Cmd::CurrentPatch, Duration::from_secs(5))
     }
 
     /// Switch the amp to stored patch n (0 = PANEL, 1 = A1 ... 8 = B4), like its channel buttons.
@@ -222,6 +230,19 @@ impl Worker {
                 }
                 Msg::Cmd(Cmd::WritePatch(v, r)) => {
                     let _ = r.send(self.write_patch(&v));
+                    Ok(())
+                }
+                Msg::Cmd(Cmd::CurrentPatch(r)) => {
+                    let res = self
+                        .send(&roland::rq1(&self.t, CMD_CURRENT_PATCH, 2))
+                        .and_then(|_| {
+                            let d = self.wait_dt1(CMD_CURRENT_PATCH, Duration::from_secs(2))?;
+                            match d[..] {
+                                [hi, lo, ..] => Ok((u16::from(hi) << 7) | u16::from(lo)),
+                                _ => bail!("short patch number reply"),
+                            }
+                        });
+                    let _ = r.send(res);
                     Ok(())
                 }
                 Msg::Cmd(Cmd::SelectPatch(n, r)) => {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { backend } from './lib/backend'
-  import { store, type View } from './lib/store.svelte'
+  import { channels } from './lib/schema'
+  import { PATCH_NAMES, store, type View } from './lib/store.svelte'
   import Editor from './views/Editor.svelte'
   import Guitars from './views/Guitars.svelte'
   import Library from './views/Library.svelte'
@@ -17,19 +18,17 @@
   ]
 
   let guitarMenu = $state(false)
-
-  const PATCH_NAMES = ['Panel', 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4']
+  let channelMenu = $state(false)
+  const chName = (n: number) => PATCH_NAMES[n] ?? `Patch ${n}`
   function syncInfo() {
     if (store.synced) {
       store.toast('Live: the editor is what the amp is playing. Changes on either one apply to the other.')
       return
     }
-    const p = store.ampPatch !== null ? PATCH_NAMES[store.ampPatch] ?? `patch ${store.ampPatch}` : null
+    const p = store.channel !== null ? chName(store.channel) : 'its channel'
     store.confirm = {
       title: 'Editor and amp differ',
-      body: p
-        ? `The amp switched to ${p}, so it no longer plays the editor tone. Load ${p} into the editor, or send the editor tone back to the amp.`
-        : 'The amp may be playing a different sound than the editor shows. Load the amp\'s sound into the editor, or send the editor tone to the amp.',
+      body: `The amp is playing a different sound than the editor shows. Load the amp's sound (${p}) into the editor, or send the editor tone to the amp.`,
       actions: [
         { label: 'Cancel', run: () => {} },
         { label: '↓ Load from amp', run: () => store.pullFromAmp() },
@@ -113,34 +112,56 @@
               <path d="M9 15l-1 1a3.5 3.5 0 0 1-5-5l1-1M15 9l1-1a3.5 3.5 0 0 1 5 5l-1 1M8 3v3M3 8h3M16 21v-3M21 16h-3" />
             {/if}
           </svg>
-          <span>{store.synced ? 'Live' : store.ampPatch !== null ? `Amp on ${PATCH_NAMES[store.ampPatch] ?? store.ampPatch}` : 'Not synced'}</span>
+          <span>{store.synced ? 'Live' : 'Not synced'}</span>
         </button>
       {/if}
 
       <span class="grow"></span>
       {#if store.amp.busy}<span class="busy"><span class="spin"></span>{store.amp.busy}</span>{/if}
 
-      <button class="chip-btn" onclick={() => (guitarMenu = !guitarMenu)} title="Active guitar">
-        🎸 {store.activeGuitar?.name ?? 'No guitar'} ▾
-      </button>
       {#if store.amp.connected}
-        <button class="chip-btn conn on" onclick={() => store.disconnect()} title="Disconnect">
-          <span class="dot"></span>{store.amp.port}{backend.mock ? ' · demo' : ''}
+        <span class="anchor">
+          <button class="chip-btn chan" onclick={() => { channelMenu = !channelMenu; guitarMenu = false }} title="Channel the amp is on: tap to switch">
+            {#if store.channel !== null}
+              <b>{chName(store.channel)}</b><span class="cname">{store.channelTone(store.channel) ?? ''}</span>
+            {:else}<span class="dim">Channel ?</span>{/if}
+            <span class="dim">▾</span>
+          </button>
+          {#if channelMenu}
+            <div class="gmenu cmenu" role="menu">
+              {#each channels as c (c.key)}
+                <button class:sel={store.channel === c.patch} disabled={!!store.amp.busy}
+                  onclick={() => { channelMenu = false; store.selectChannel(c.key) }}>
+                  <b>{c.key}</b> <span class="dim">{store.channelTone(c.patch) ?? 'Unknown tone'}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </span>
+      {/if}
+      <span class="anchor">
+        <button class="chip-btn" onclick={() => { guitarMenu = !guitarMenu; channelMenu = false }} title="Active guitar">
+          🎸 {store.activeGuitar?.name ?? 'No guitar'} ▾
+        </button>
+        {#if guitarMenu}
+          <div class="gmenu" role="menu">
+            <button class:sel={!store.activeGuitarId} onclick={() => { store.setActiveGuitar(null); guitarMenu = false }}>No guitar</button>
+            {#each store.guitars as g (g.id)}
+              <button class:sel={store.activeGuitarId === g.id} onclick={() => { store.setActiveGuitar(g.id); guitarMenu = false }}>{g.name}</button>
+            {/each}
+            <button class="ghost" onclick={() => { store.view = 'guitars'; guitarMenu = false }}>Manage guitars…</button>
+          </div>
+        {/if}
+      </span>
+      {#if store.amp.connected}
+        <button class="chip-btn conn on dotonly" onclick={() => store.disconnect()}
+          title="Connected to {store.amp.port}{backend.mock ? ' (demo)' : ''}: tap to disconnect" aria-label="Connected: tap to disconnect">
+          <span class="dot"></span>
         </button>
       {:else}
         <button class="chip-btn conn" disabled={!!store.amp.busy} onclick={() => store.connect()}><span class="dot"></span>Connect amp</button>
       {/if}
     </header>
-
-    {#if guitarMenu}
-      <div class="gmenu" role="menu">
-        <button class:sel={!store.activeGuitarId} onclick={() => { store.setActiveGuitar(null); guitarMenu = false }}>No guitar</button>
-        {#each store.guitars as g (g.id)}
-          <button class:sel={store.activeGuitarId === g.id} onclick={() => { store.setActiveGuitar(g.id); guitarMenu = false }}>{g.name}</button>
-        {/each}
-        <button class="ghost" onclick={() => { store.view = 'guitars'; guitarMenu = false }}>Manage guitars…</button>
-      </div>
-    {/if}
 
     <main class="view">
       {#if store.view === 'editor'}<Editor />{:else if store.view === 'library'}<Library />{:else if store.view === 'setlists'}<Setlists />{:else}<Guitars />{/if}
@@ -209,12 +230,18 @@
   .menu-list button:hover:not(:disabled) { background: var(--panel2); }
   .chip-btn { border-radius: 22px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .conn { display: flex; align-items: center; gap: 8px; }
+  .dotonly { width: var(--tap); padding: 0; justify-content: center; }
+  .chan { display: flex; align-items: center; gap: 8px; max-width: 280px; }
+  .chan b { color: var(--accent); }
+  .cname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .cmenu b { color: var(--accent); margin-right: 6px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
   .conn.on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
   .busy { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 14px; }
   .spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .gmenu { position: absolute; top: 62px; right: 150px; z-index: 30; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 240px; box-shadow: 0 10px 30px #0008; }
+  .anchor { position: relative; display: flex; }
+  .gmenu { position: absolute; top: 52px; right: 0; z-index: 30; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 240px; box-shadow: 0 10px 30px #0008; }
   .gmenu button { text-align: left; }
   .gmenu .sel { border-color: var(--accent); }
   .view { flex: 1; min-height: 0; }

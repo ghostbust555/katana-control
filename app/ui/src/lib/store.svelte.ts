@@ -63,6 +63,9 @@ export interface Confirm {
   actions: { label: string; primary?: boolean; run: () => void }[]
 }
 
+/** Stored patch numbers as the amp counts them. */
+export const PATCH_NAMES = ['Panel', 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4']
+
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
@@ -105,8 +108,8 @@ class Store {
   /** True while the editor tone is known to be what the amp is playing (edits flow both ways).
    *  Goes false when the amp switches channel or something else is put on the amp. */
   synced = $state(false)
-  /** Patch the amp last reported switching to (0 = panel, 1-4 = A1-A4, 5-8 = B1-B4). */
-  ampPatch = $state<number | null>(null)
+  /** Stored patch the amp is on (0 = panel, 1-4 = A1-A4, 5-8 = B1-B4); null until known. */
+  channel = $state<number | null>(null)
   /** Our own channel writes make the amp report a patch change; ignore those until this time. */
   private ignorePatchUntil = 0
   toasts = $state<Toast[]>([])
@@ -116,6 +119,12 @@ class Store {
   get dirty() {
     return JSON.stringify(this.tone.params) !== this.saved
   }
+  /** Name of the library tone on stored patch n, if known. */
+  channelTone(n: number) {
+    const key = channels.find((c) => c.patch === n)?.key
+    return key ? (this.tones.find((t) => t.id === this.assignments[key])?.name ?? null) : null
+  }
+
   get activeGuitar() {
     return this.guitars.find((g) => g.id === this.activeGuitarId) ?? null
   }
@@ -125,8 +134,8 @@ class Store {
     backend.onAmpEvent((e) => {
       if (e.kind === 'param') this.setParam(e.id, e.value, { fromAmp: true })
       else if (e.kind === 'patchSelected') {
+        this.channel = e.number
         if (this.amp.busy || Date.now() < this.ignorePatchUntil) return
-        this.ampPatch = e.number
         this.synced = false
       } else {
         this.amp.connected = false
@@ -335,6 +344,7 @@ class Store {
     }
     // The editor is left as it is; Load from amp / Send to amp are explicit toolbar buttons.
     // It counts as synced only if the amp happens to be playing the same sound already.
+    this.channel = await backend.currentPatch().catch(() => null)
     const cur = await this.busy('Reading the amp…', () => backend.readPatch())
     this.synced = !!cur && sameParams(cur, this.tone.params)
     await this.loadChannelsFromAmp()
@@ -367,6 +377,7 @@ class Store {
   async disconnect() {
     await backend.disconnect()
     this.amp.connected = false
+    this.channel = null
     this.synced = false
   }
 
@@ -377,7 +388,6 @@ class Store {
       this.askDiscard(() => {
         this.load(newTone(name, v), false)
         this.synced = true
-        this.ampPatch = null
       })
     })
   }
@@ -386,7 +396,6 @@ class Store {
     const ok = await this.busy('Sending tone to amp…', async () => (await backend.writePatch(this.tone.params), true))
     if (ok) {
       this.synced = true
-      this.ampPatch = null
     }
   }
 
@@ -416,6 +425,7 @@ class Store {
     this.ignorePatchUntil = Date.now() + 1500
     this.synced = !!ok && sameParams(v, this.tone.params)
     if (ok) {
+      this.channel = ch.patch // the amp switches to the channel it just stored
       this.channelGuitar[key] = this.activeGuitarId
       this.assignments[key] = t.id
       backend.saveDoc('channels', this.assignments)
@@ -430,14 +440,13 @@ class Store {
     const ok = await this.busy(`Switching to ${key}…`, async () => (await backend.selectPatch(ch.patch), true))
     if (!ok) return
     this.ignorePatchUntil = Date.now() + 1500
+    this.channel = ch.patch
     const t = this.tones.find((t) => t.id === this.assignments[key])
     if (t && this.channelGuitar[key] === this.activeGuitarId && !this.dirty) {
       this.load(t, true)
       this.synced = true
-      this.ampPatch = null
     } else {
       this.synced = false
-      this.ampPatch = ch.patch
     }
   }
 

@@ -242,6 +242,20 @@ async fn write_channel(
 }
 
 #[tauri::command]
+async fn current_patch(app: AppHandle) -> CmdResult<u16> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        session(&state)?
+            .as_ref()
+            .unwrap()
+            .current_patch()
+            .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
 fn select_patch(state: State<AppState>, patch: u8) -> CmdResult<()> {
     session(&state)?
         .as_ref()
@@ -356,6 +370,7 @@ fn main() {
             write_patch,
             write_channel,
             select_patch,
+            current_patch,
             set_deltas,
             list_tones,
             save_tone,

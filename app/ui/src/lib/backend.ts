@@ -20,6 +20,7 @@ export interface Backend {
   writePatch(values: Values): Promise<void>
   writeChannel(patch: number, values: Values): Promise<void>
   selectPatch(patch: number): Promise<void>
+  currentPatch(): Promise<number>
   setDeltas(deltas: Record<string, number>): Promise<void>
   listTones(): Promise<unknown[]>
   saveTone(tone: unknown): Promise<void>
@@ -60,6 +61,7 @@ const tauri: Backend = {
   writePatch: (values) => call('write_patch', { values }),
   writeChannel: (patch, values) => call('write_channel', { patch, values }),
   selectPatch: (patch) => call('select_patch', { patch }),
+  currentPatch: () => call('current_patch'),
   setDeltas: (deltas) => call('set_deltas', { deltas }),
   listTones: () => call('list_tones'),
   saveTone: (tone) => call('save_tone', { tone }),
@@ -91,6 +93,7 @@ function mockBackend(): Backend {
     writePatch: async (v) => (await sleep(400), void (amp = { ...amp, ...v })),
     writeChannel: async () => void (await sleep(700)),
     selectPatch: async () => void (await sleep(50)),
+    currentPatch: async () => (await sleep(50), 1),
     setDeltas: async () => {},
     listTones: async () =>
       Object.keys(localStorage)
