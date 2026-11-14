@@ -1981,6 +1981,7 @@ dependencies = [
  "clap",
  "katana-core",
  "midir",
+ "serde_json",
 ]
 
 [[package]]

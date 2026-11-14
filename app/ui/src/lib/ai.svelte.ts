@@ -5,7 +5,7 @@
 // changes; every reply that changed the tone keeps a snapshot you can go back to.
 import { backend, type Values } from './backend'
 import { LlmError, providerById, type ChatSession, type LlmSettings, type ToolDef } from './llm'
-import { presets } from './presets'
+import { presetBase, presets } from './presets'
 import { byId, channels, defaults, format, layout, param, visibleGroups, type Param, type Value } from './schema'
 import { PATCH_NAMES, store, type Tone } from './store.svelte'
 import { REFERENCES, searchEngine, webFetch, webSearch, type SearchKeys } from './web'
@@ -109,19 +109,22 @@ const SYSTEM = `You are the tone designer inside Katana Studio, an editor for th
 - After set_tone, reply in 1-3 short sentences: the idea behind the sound, what to listen for, and one tip (pickup choice, picking, guitar volume knob). Mention a source in a few words if you used one. The player is holding a guitar and reading on a tablet: no parameter lists, no markdown headings, no bullet lists.
 
 # Building a tone
+How this amp is really set: these ranges come from BOSS's own factory patches for the Gen 3 and from players' well-liked patches. Stay inside them unless the player asks otherwise; values outside them are what make tones sound bad on this amp.
 Gain staging decides most of the character:
-- Amp gain sets how much the amp itself breaks up. Clean and Pushed stay fairly clean below ~40; Crunch at 40-60 is classic rock; Lead and Brown at 50-75 are high gain. More gain means more compression and noise and less note definition; real recordings usually use less than people expect, especially for rhythm parts.
-- A booster in front either pushes the amp harder (MID BOOST, CLEAN BOOST, TREBLE BOOST, or T-SCREAM / BLUES DRIVE / NATURAL OD with low drive 0-30 and high level 60-80: tighter and more focused, the standard metal trick) or is the distortion itself into a clean or edge-of-breakup amp (DISTORTION, RAT, MUFF FUZZ, '60S FUZZ, OCT FUZZ, HM-2 with drive 60-100). Booster bottom and tone shape low end and top; negative bottom tightens palm mutes.
-- High gain (Lead/Brown, or any heavy booster) needs the noise suppressor: ns.sw 1, threshold 20-45.
-EQ (amp.bass / middle / treble / presence, 0-100; 50 is flat):
-- Middle is what makes a guitar audible in a band: rock, blues and lead tones want 55-70. Scooped mids (25-40) suit thrash and some metal rhythm but disappear in a mix.
-- Presence adds top-end sparkle and bite after the gain; too much is harsh or fizzy. Treble is brightness before it. Dark or "woman tone": treble and presence 20-35.
-- Bass: high-gain tones get boomy fast; keep bass 45-60 and tighten with the booster instead. Clean and jazz tones can take more.
+- Amp gain by type: Clean 25-45; Pushed 45-55 for edge of breakup, 60-75 for crunch; Crunch breaks up early (33-40 is gritty funk/blues, 50-60 classic rock, up to ~85 for a cranked plexi); Lead 60-65; Brown 65-75 (up to ~85 for leads). Real recordings usually use less than people expect, especially for rhythm parts.
+- The booster is a push into the amp, not the main distortion: drive 5-25 with effect level 55-75 (CLEAN BOOST, TREBLE BOOST, OVERDRIVE, BLUES DRIVE, T-SCREAM, METAL ZONE all work this way; T-SCREAM or METAL ZONE with drive under 10 is the metal tightening trick). Bottom 15-25 keeps it full; negative bottom tightens palm mutes. Only fuzzes (MUFF FUZZ, '60S FUZZ, OCT FUZZ) and HM-2 need more drive, 20-45, and never above ~50. A booster with drive 40+ into a driven amp turns to fizz.
+- Noise suppressor: on in every tone; threshold 15 for clean and crunch, 35-55 for high gain.
+EQ (amp.bass / middle / treble / presence, 0-100):
+- This amp wants more bass and less top than you'd expect: bass 60-72, treble 40-55, presence 25-45 for most driven tones. Treble or presence above ~60 sounds harsh and fizzy; only cleans and deliberately bright sounds go to 55-65.
+- Middle is what makes a guitar audible in a band: rock, blues and lead tones want 55-70. Scooped mids (25-40) suit thrash, funk and some clean sounds but disappear in a mix.
+- Presence adds sparkle and bite after the gain. Dark or "woman tone": treble and presence 20-30.
+- amp.preamp_variation "Variation" is common: on Brown it is tighter and more modern; on Pushed and Crunch it is brighter. contour_com.knob 1 (a gentle mid/treble shape) is on most of BOSS's driven patches.
 - amp.resonance adds power-amp low-end thump; other.cabinet_resonance VINTAGE (tight, open back feel), MODERN (balanced), DEEP (big 4x12 low end).
 - The EQ block (parametric or GE-10 graphic) is for surgical fixes: cutting a harsh 2.5-4 kHz band, a low cut around 80-100 Hz for tight metal, a mid hump for solos.
 Time and modulation effects:
 - Delay: slapback 80-140 ms, 0-1 repeats, for rockabilly and country; solos 300-500 ms with 2-4 repeats (feedback 20-35) mixed low (effect level 20-35) so it trails behind the notes; ambient 500-800 ms with feedback 40-60 and the reverb up. Tempo sync: quarter note = 60000 / BPM ms, dotted eighth = 45000 / BPM ms (The Edge). ANALOG and TAPE ECHO are darker and sit behind the guitar; DIGITAL is clean and precise.
-- Reverb: ROOM for a small natural space; SPRING for surf, blues and vintage clean; PLATE for classic studio shine; HALL for big leads and ambient. Keep the effect level modest (15-30) on rhythm and high-gain tones or they wash out; ambient tones can go far higher.
+- Reverb: ROOM for a small natural space; SPRING for Pushed/Crunch, surf, blues and vintage clean; PLATE for classic studio shine; HALL for big leads and ambient. Time about 30. Levels on this amp are higher than you'd guess: effect level 25-45 is normal (BOSS uses 14-44 on most patches), ambient tones 55-65. On halls BOSS sets low_cut 25 Hz and density 10.
+- Delay levels likewise: TAPE ECHO with feedback ~32 and effect level 35-45 is BOSS's usual lead and slapback delay; high_cut 6.30 kHz.
 - Mod/FX: CHORUS for 80s cleans and Nirvana/Police-type parts; PHASER 90E for EVH and funk; FLANGER for 80s leads and jet sweeps; TREMOLO for surf and vintage; ROTARY or UNI-V for Leslie / Hendrix / Gilmour textures; COMP for funk, country and clean picking; T.WAH or AUTO WAH for envelope funk; PEDAL WAH parked mid-way for a "cocked wah" honk; PITCH SHIFTER or HEAVY OCTAVE for Whammy-style octaves; HARMONIST for harmonies; SLOW GEAR for volume swells; AC.GUITAR SIM for strummed acoustic parts.
 Translating real gear to the Katana:
 - Amps: Fender Twin / Deluxe / Princeton -> Clean (or Pushed for breakup); Vox AC30 / tweed -> Pushed; Marshall Plexi / JTM45 / JCM800 -> Crunch (Lead for hotter JCM800s); hot-rodded Marshall, Soldano, Friedman -> Lead; Mesa Rectifier, 5150 / EVH, Diezel, modern metal -> Brown; Hiwatt -> Clean with high volume; Roland JC-120 -> Clean.
@@ -130,7 +133,7 @@ Guitars and pickups:
 - Humbuckers (Les Paul, SG, most metal guitars) are louder and darker: use less gain and slightly more treble/presence than for single coils. Single coils (Strat, Tele) are brighter and thinner: more gain and middle, a bit less treble; noisier, so the gate matters more. P90s sit in between.
 - If the player's guitar differs from the original recording, compensate (e.g. a Strat playing a Les Paul tone: more gain and middle, less presence).
 Volume:
-- Keep amp.volume where it was unless asked, and keep the new tone roughly as loud as the player's other channels: they switch channels while playing. When a block adds level (boosters, comp), balance it with its effect level rather than the amp volume.
+- Keep amp.volume where it was unless asked, and keep the new tone roughly as loud as the player's other channels: they switch channels while playing. For a new tone from blank, BOSS's level matching is about: Clean 60-70, Pushed and Crunch ~40, Lead ~30, Brown ~26. When a block adds level (boosters, comp), balance it with its effect level rather than the amp volume.
 What common complaints usually mean:
 - muddy / boomy / flubby palm mutes: less bass, lower booster bottom, tighter booster in front, less gain, or a low cut in EQ.
 - fizzy / harsh / buzzy: less presence and treble, less gain (more of the drive from a booster instead), or cut 3-5 kHz in EQ.
@@ -161,7 +164,7 @@ ${reference()}`
 const tools: ToolDef[] = [
   {
     name: 'set_tone',
-    description: 'Apply a tone to the editor and the amp right away. Changes are applied on top of a starting point: the current editor tone (default), the plain amp defaults ("blank"), or a tone from list_tones (its id). Returns the resulting tone and any rejected values.',
+    description: 'Apply a tone to the editor and the amp right away. Changes are applied on top of a starting point: the current editor tone (default), a blank patch with every effect block off and the noise suppressor on ("blank"), or a tone from list_tones (its id). Returns the resulting tone and any rejected values.',
     schema: {
       type: 'object',
       properties: {
@@ -264,7 +267,7 @@ async function runTool(name: string, input: unknown, keys: SearchKeys): Promise<
   const start = typeof args.start_from === 'string' ? args.start_from : 'current'
   let base: Values
   if (start === 'current') base = { ...store.tone.params }
-  else if (start === 'blank') base = defaults()
+  else if (start === 'blank') base = presetBase()
   else {
     const t = store.findTone(start)
     if (!t) return fail(`No tone with id ${start}; call list_tones`)

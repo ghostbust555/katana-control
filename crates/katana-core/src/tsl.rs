@@ -3,7 +3,7 @@
 //!
 //! ```json
 //! { "name": "My set", "formatRev": "0000", "device": "KATANA Gen3",
-//!   "data": [[ { "memo": "", "paramSet": { "PATCH%COM": ["4B", "41", ...], "PATCH%AMP": [...] } } ]] }
+//!   "data": [[ { "memo": "" or { "memo": "", ... }, "paramSet": { "PATCH%COM": ["4B", "41", ...], "PATCH%AMP": [...] } } ]] }
 //! ```
 //!
 //! Each `PATCH%<BLOCK>` array holds that block's bytes as hex strings, starting at the block's
@@ -32,9 +32,35 @@ struct File {
 #[serde(rename_all = "camelCase")]
 struct RawPatch {
     #[serde(default)]
-    memo: String,
+    memo: Memo,
     #[serde(default)]
     param_set: HashMap<String, Vec<String>>,
+}
+
+/// A plain string, or `{ "memo": "...", "isToneCentralPatch": bool }` in files saved by newer
+/// Tone Studio versions.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Memo {
+    Text(String),
+    Object {
+        #[serde(default)]
+        memo: String,
+    },
+}
+
+impl Default for Memo {
+    fn default() -> Self {
+        Memo::Text(String::new())
+    }
+}
+
+impl Memo {
+    fn into_text(self) -> String {
+        match self {
+            Memo::Text(t) | Memo::Object { memo: t } => t,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -108,7 +134,7 @@ pub fn parse(text: &str) -> Result<Liveset> {
             .to_string();
         patches.push(Patch {
             name,
-            memo: raw.memo,
+            memo: raw.memo.into_text(),
             values,
         });
     }
@@ -163,5 +189,11 @@ mod tests {
     fn rejects_other_models() {
         let e = parse(&file("KATANA MkII", &[])).unwrap_err().to_string();
         assert!(e.contains("KATANA MkII"), "{e}");
+    }
+
+    #[test]
+    fn reads_object_memo() {
+        let f = file(DEVICE, &[]).replace(r#""memo":"hi""#, r#""memo":{"memo":"from TC","isToneCentralPatch":true}"#);
+        assert_eq!(parse(&f).unwrap().patches[0].memo, "from TC");
     }
 }

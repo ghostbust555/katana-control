@@ -53,7 +53,12 @@ enum Cmd {
         summary: bool,
     },
     /// Decode a Tone Studio liveset (.tsl) and list its patches
-    Tsl { file: PathBuf },
+    Tsl {
+        file: PathBuf,
+        /// Print every patch with all its values as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn target(cli: &Cli) -> Result<Target> {
@@ -233,8 +238,12 @@ fn run(cli: &Cli) -> Result<()> {
             amp.send(&roland::dt1(&t, parse_addr(addr)?, &parse_hex(data)?))?;
             amp.drain(Duration::from_millis(300), ml);
         }
-        Cmd::Tsl { file } => {
+        Cmd::Tsl { file, json } => {
             let set = katana_core::tsl::parse(&std::fs::read_to_string(file)?)?;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&set)?);
+                return Ok(());
+            }
             println!("{:?}: {} patches", set.name, set.patches.len());
             let show = |v: &BTreeMap<String, katana_core::schema::Value>, id: &str| {
                 v.get(id).map(|x| x.to_string()).unwrap_or_default()

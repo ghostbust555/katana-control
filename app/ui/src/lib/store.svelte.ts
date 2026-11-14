@@ -1,6 +1,6 @@
 // App state: current tone + undo, tone library, guitars, channel assignments, amp connection.
 import { backend, log, type Values } from './backend'
-import { presets } from './presets'
+import { presetBase, presets } from './presets'
 import { byId, channels, defaults, param, writable, type Value } from './schema'
 
 export interface Tone {
@@ -72,7 +72,7 @@ export const PATCH_NAMES = ['Panel', 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', '
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
-export function newTone(name = 'New tone', values: Values = defaults()): Tone {
+export function newTone(name = 'New tone', values: Values = presetBase()): Tone {
   const t = now()
   return {
     id: uid(), schema: 1, name, author: '', tags: [], notes: '', created: t, modified: t,
