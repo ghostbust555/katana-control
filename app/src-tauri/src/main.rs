@@ -242,6 +242,15 @@ async fn write_channel(
 }
 
 #[tauri::command]
+fn select_patch(state: State<AppState>, patch: u8) -> CmdResult<()> {
+    session(&state)?
+        .as_ref()
+        .unwrap()
+        .select_patch(patch)
+        .map_err(err)
+}
+
+#[tauri::command]
 fn set_deltas(state: State<AppState>, deltas: HashMap<String, i64>) {
     *state.deltas.lock().unwrap() = deltas;
 }
@@ -346,6 +355,7 @@ fn main() {
             read_channel,
             write_patch,
             write_channel,
+            select_patch,
             set_deltas,
             list_tones,
             save_tone,

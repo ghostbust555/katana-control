@@ -19,6 +19,7 @@ const REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 
 const CMD_EDITOR_LEVEL: [u8; 4] = [0x7F, 0, 0, 0];
 const CMD_EDITOR_MODE: [u8; 4] = [0x7F, 0, 0, 1];
+const CMD_PATCH_SELECT: [u8; 4] = [0x7F, 0, 1, 0];
 const CMD_PATCH_WRITE: [u8; 4] = [0x7F, 0, 1, 4];
 
 #[derive(Clone, Debug)]
@@ -46,6 +47,7 @@ enum Cmd {
     ReadPatch(Option<u8>, Reply<BTreeMap<String, Value>>),
     WritePatch(BTreeMap<String, Value>, Reply<()>),
     WriteChannel(u8, BTreeMap<String, Value>, Reply<()>),
+    SelectPatch(u8, Reply<()>),
     Close,
 }
 
@@ -112,6 +114,11 @@ impl Session {
     /// Replace the amp's current patch (not saved to a channel).
     pub fn write_patch(&self, values: BTreeMap<String, Value>) -> Result<()> {
         self.call(|r| Cmd::WritePatch(values, r), Duration::from_secs(60))
+    }
+
+    /// Switch the amp to stored patch n (0 = PANEL, 1 = A1 ... 8 = B4), like its channel buttons.
+    pub fn select_patch(&self, patch: u8) -> Result<()> {
+        self.call(|r| Cmd::SelectPatch(patch, r), Duration::from_secs(5))
     }
 
     /// Load `values` into the current patch, then store it in channel memory `patch` (1 = A1 ... 8 = B4).
@@ -215,6 +222,12 @@ impl Worker {
                 }
                 Msg::Cmd(Cmd::WritePatch(v, r)) => {
                     let _ = r.send(self.write_patch(&v));
+                    Ok(())
+                }
+                Msg::Cmd(Cmd::SelectPatch(n, r)) => {
+                    // Tone Studio sends this without waiting for a reply.
+                    let msg = roland::dt1(&self.t, CMD_PATCH_SELECT, &[0, n]);
+                    let _ = r.send(self.send(&msg));
                     Ok(())
                 }
                 Msg::Cmd(Cmd::WriteChannel(n, v, r)) => {

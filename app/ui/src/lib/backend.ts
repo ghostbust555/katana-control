@@ -19,6 +19,7 @@ export interface Backend {
   readChannel(patch: number): Promise<Values>
   writePatch(values: Values): Promise<void>
   writeChannel(patch: number, values: Values): Promise<void>
+  selectPatch(patch: number): Promise<void>
   setDeltas(deltas: Record<string, number>): Promise<void>
   listTones(): Promise<unknown[]>
   saveTone(tone: unknown): Promise<void>
@@ -58,6 +59,7 @@ const tauri: Backend = {
   readChannel: (patch) => call('read_channel', { patch }),
   writePatch: (values) => call('write_patch', { values }),
   writeChannel: (patch, values) => call('write_channel', { patch, values }),
+  selectPatch: (patch) => call('select_patch', { patch }),
   setDeltas: (deltas) => call('set_deltas', { deltas }),
   listTones: () => call('list_tones'),
   saveTone: (tone) => call('save_tone', { tone }),
@@ -88,6 +90,7 @@ function mockBackend(): Backend {
     readChannel: async (patch) => (await sleep(300), { ...defaults(), 'com.name': `CH ${patch} TONE`.padEnd(16, ' '), 'amp.gain': 20 + patch * 10 }),
     writePatch: async (v) => (await sleep(400), void (amp = { ...amp, ...v })),
     writeChannel: async () => void (await sleep(700)),
+    selectPatch: async () => void (await sleep(50)),
     setDeltas: async () => {},
     listTones: async () =>
       Object.keys(localStorage)

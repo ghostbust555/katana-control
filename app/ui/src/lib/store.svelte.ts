@@ -22,7 +22,20 @@ export interface Guitar {
   deltas: Record<string, number>
 }
 
-export type View = 'editor' | 'library' | 'guitars'
+/** One song in a setlist: which tone goes on each amp channel. */
+export interface Song {
+  id: string
+  name: string
+  channels: Record<string, string | null>
+}
+
+export interface Setlist {
+  id: string
+  name: string
+  songs: Song[]
+}
+
+export type View = 'editor' | 'library' | 'setlists' | 'guitars'
 
 interface Change {
   id: string
@@ -81,6 +94,13 @@ class Store {
   activeGuitarId = $state<string | null>(null)
   assignments = $state<Record<string, string | null>>(Object.fromEntries(channels.map((c) => [c.key, null])))
 
+  setlists = $state<Setlist[]>([])
+  /** The song whose tones were last put on the amp's channels. */
+  liveSong = $state<{ setlistId: string; songId: string } | null>(null)
+  /** Guitar each channel was last written or read with (this session). With the tone in
+   *  `assignments` it tells whether a channel already holds a sound, so it needn't be rewritten. */
+  private channelGuitar: Record<string, string | null | undefined> = {}
+
   amp = $state({ connected: false, port: '', busy: '' })
   /** True while the editor tone is known to be what the amp is playing (edits flow both ways).
    *  Goes false when the amp switches channel or something else is put on the amp. */
@@ -122,6 +142,11 @@ class Store {
     }
     const a = await backend.loadDoc<Record<string, string | null>>('channels')
     if (a) Object.assign(this.assignments, a)
+    const sl = await backend.loadDoc<{ setlists: Setlist[]; live: Store['liveSong'] }>('setlists')
+    if (sl) {
+      this.setlists = sl.setlists
+      this.liveSong = sl.live
+    }
     await backend.setDeltas(this.activeGuitar?.deltas ?? {})
     const last = await backend.loadDoc<{ toneId: string }>('session')
     const t = last && this.tones.find((t) => t.id === last.toneId)
@@ -331,6 +356,7 @@ class Store {
           this.tones = [t, ...this.tones]
         }
         this.assignments[c.key] = t.id
+        this.channelGuitar[c.key] = this.activeGuitarId
         return true
       })
       if (!ok) break // amp stopped answering; the error toast is already shown
@@ -376,23 +402,109 @@ class Store {
   }
 
   async writeChannel(key: string) {
-    const ch = channels.find((c) => c.key === key)!
     const t = this.tones.find((t) => t.id === this.assignments[key])
     if (!t) return this.toast(`No tone assigned to ${key}`, 'error')
+    if (await this.writeTone(key, t)) this.toast(`${key} ← "${t.name}"`)
+  }
+
+  /** Store `t` (with the active guitar's adjustments) in channel `key`. */
+  private async writeTone(key: string, t: Tone): Promise<boolean> {
+    const ch = channels.find((c) => c.key === key)!
     // Writing a channel goes through the amp's current patch, so the amp ends up playing it.
     const v = { ...defaults(), ...t.params }
-    await this.busy(`Writing "${t.name}" to ${key}…`, async () => {
-      await backend.writeChannel(ch.patch, v)
-      this.toast(`${key} ← "${t.name}"`)
-    })
+    const ok = await this.busy(`Writing "${t.name}" to ${key}…`, async () => (await backend.writeChannel(ch.patch, v), true))
     this.ignorePatchUntil = Date.now() + 1500
-    this.synced = sameParams(v, this.tone.params)
+    this.synced = !!ok && sameParams(v, this.tone.params)
+    if (ok) {
+      this.channelGuitar[key] = this.activeGuitarId
+      this.assignments[key] = t.id
+      backend.saveDoc('channels', this.assignments)
+    }
+    return !!ok
+  }
+
+  /** Switch the amp to channel `key`, as its channel buttons do. If that channel's tone is
+   *  known and the editor has nothing unsaved, the editor takes that tone and stays live. */
+  async selectChannel(key: string) {
+    const ch = channels.find((c) => c.key === key)!
+    const ok = await this.busy(`Switching to ${key}…`, async () => (await backend.selectPatch(ch.patch), true))
+    if (!ok) return
+    this.ignorePatchUntil = Date.now() + 1500
+    const t = this.tones.find((t) => t.id === this.assignments[key])
+    if (t && this.channelGuitar[key] === this.activeGuitarId && !this.dirty) {
+      this.load(t, true)
+      this.synced = true
+      this.ampPatch = null
+    } else {
+      this.synced = false
+      this.ampPatch = ch.patch
+    }
   }
 
   async writeAllChannels() {
     for (const c of channels) if (this.assignments[c.key]) await this.writeChannel(c.key)
     // Leave the editor tone on the amp afterwards.
     if (this.amp.connected) await this.sendToAmp()
+  }
+
+  // ---------------------------------------------------------------- setlists
+
+  persistSetlists() {
+    backend.saveDoc('setlists', { setlists: $state.snapshot(this.setlists), live: $state.snapshot(this.liveSong) })
+  }
+
+  addSetlist(): Setlist {
+    this.setlists.push({ id: uid(), name: 'New setlist', songs: [] })
+    this.persistSetlists()
+    return this.setlists.at(-1)!
+  }
+
+  deleteSetlist(list: Setlist, then: () => void) {
+    this.confirm = {
+      title: 'Delete setlist',
+      body: `Delete "${list.name}" and its ${list.songs.length} song${list.songs.length === 1 ? '' : 's'}? The tones are kept.`,
+      actions: [
+        { label: 'Cancel', run: () => {} },
+        {
+          label: 'Delete', primary: true,
+          run: () => {
+            this.setlists = this.setlists.filter((x) => x.id !== list.id)
+            if (this.liveSong?.setlistId === list.id) this.liveSong = null
+            this.persistSetlists()
+            then()
+          },
+        },
+      ],
+    }
+  }
+
+  /** New song; starts with the previous song's channels (or the amp's), since tones often repeat. */
+  addSong(list: Setlist) {
+    const prev = list.songs.at(-1)?.channels ?? this.assignments
+    list.songs.push({ id: uid(), name: `Song ${list.songs.length + 1}`, channels: { ...prev } })
+    this.persistSetlists()
+  }
+
+  /** Put a song's tones on the amp's channels, then switch the amp to its first channel.
+   *  Channels that already hold the right tone (for the active guitar) are not rewritten. */
+  async applySong(list: Setlist, song: Song) {
+    if (!this.amp.connected) return this.toast('Connect the amp first', 'error')
+    if (this.amp.busy) return
+    let missing = 0
+    for (const c of channels) {
+      const id = song.channels[c.key]
+      if (!id) continue
+      const t = this.tones.find((t) => t.id === id)
+      if (!t) { missing++; continue }
+      if (this.assignments[c.key] === id && this.channelGuitar[c.key] === this.activeGuitarId) continue
+      if (!(await this.writeTone(c.key, t))) return // error toast already shown
+    }
+    this.liveSong = { setlistId: list.id, songId: song.id }
+    this.persistSetlists()
+    const first = channels.find((c) => song.channels[c.key] && this.tones.some((t) => t.id === song.channels[c.key]))
+    if (first) await this.selectChannel(first.key)
+    if (missing) this.toast(`${missing} tone${missing === 1 ? ' was' : 's were'} deleted from the library; left as is`, 'error')
+    else this.toast(`"${song.name}" is on the amp${first ? ` · ${first.key}` : ''}`)
   }
 
   // ---------------------------------------------------------------- guitars
