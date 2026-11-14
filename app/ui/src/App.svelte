@@ -81,8 +81,8 @@
       <button class="ghost title" onclick={rename} title="Rename">
         <span class="tname">{store.tone.name}</span>{#if store.dirty}<span class="mod" title="Unsaved changes">●</span>{/if}
       </button>
-      <button class="ghost icon" title="Undo (Ctrl+Z)" disabled={!store.undoStack.length} onclick={() => store.undo()}>↶</button>
-      <button class="ghost icon" title="Redo (Ctrl+Y)" disabled={!store.redoStack.length} onclick={() => store.redo()}>↷</button>
+      <button class="ghost icon ur" title="Undo (Ctrl+Z)" disabled={!store.undoStack.length} onclick={() => store.undo()}>↶</button>
+      <button class="ghost icon ur" title="Redo (Ctrl+Y)" disabled={!store.redoStack.length} onclick={() => store.redo()}>↷</button>
       <button class="primary" onclick={save} title="Ctrl+S">Save</button>
       <details class="menu">
         <summary>More ▾</summary>
@@ -104,7 +104,8 @@
 
       {#if store.amp.connected}
         <button class="sync" class:live={store.synced} onclick={syncInfo}
-          title={store.synced ? 'Live: editor and amp are in sync' : 'Not synced: the amp is playing something else'}>
+          title={store.synced ? 'Live: editor and amp are in sync' : 'Not synced: the amp is playing something else'}
+          aria-label={store.synced ? 'Live' : 'Not synced'}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             {#if store.synced}
               <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
@@ -112,7 +113,6 @@
               <path d="M9 15l-1 1a3.5 3.5 0 0 1-5-5l1-1M15 9l1-1a3.5 3.5 0 0 1 5 5l-1 1M8 3v3M3 8h3M16 21v-3M21 16h-3" />
             {/if}
           </svg>
-          <span>{store.synced ? 'Live' : 'Not synced'}</span>
         </button>
       {/if}
 
@@ -154,7 +154,7 @@
         {/if}
       </span>
       {#if store.amp.connected}
-        <button class="chip-btn conn on dotonly" onclick={() => store.disconnect()}
+        <button class="ghost conn on dotonly" onclick={() => store.disconnect()}
           title="Connected to {store.amp.port}{backend.mock ? ' (demo)' : ''}: tap to disconnect" aria-label="Connected: tap to disconnect">
           <span class="dot"></span>
         </button>
@@ -218,10 +218,10 @@
   .icon { width: var(--tap); padding: 0; font-size: 22px; }
   .arrow { display: grid; place-items: center; }
   .arrow svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .sync { display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--warn, #e8a33d); border-color: color-mix(in srgb, currentColor 45%, transparent); }
+  .ur { width: 32px; }
+  .sync { width: 40px; display: grid; place-items: center; padding: 0; color: var(--warn, #e8a33d); border-color: color-mix(in srgb, currentColor 45%, transparent); }
   .sync.live { color: var(--ok); }
   .sync svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .sync span { font-weight: 600; white-space: nowrap; }
   .menu { position: relative; }
   .menu summary { list-style: none; min-height: var(--tap); display: flex; align-items: center; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
   .menu summary::-webkit-details-marker { display: none; }
@@ -230,7 +230,7 @@
   .menu-list button:hover:not(:disabled) { background: var(--panel2); }
   .chip-btn { border-radius: 22px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
   .conn { display: flex; align-items: center; gap: 8px; }
-  .dotonly { width: var(--tap); padding: 0; justify-content: center; }
+  .dotonly { width: 28px; padding: 0; justify-content: center; }
   .chan { display: flex; align-items: center; gap: 8px; max-width: 280px; }
   .chan b { color: var(--accent); }
   .cname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
