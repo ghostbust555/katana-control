@@ -271,17 +271,40 @@ class Store {
       actions: [
         { label: 'Cancel', run: () => {} },
         { label: 'Discard', run: go },
-        { label: 'Save first', primary: true, run: () => this.save().then(go) },
+        { label: 'Save first', primary: true, run: () => this.save().then((ok) => ok && go()) },
       ],
     }
   }
 
-  async save(asName?: string) {
-    if (asName !== undefined) {
+  /** Save the editor tone. A name already used by another tone asks to overwrite that tone
+   *  (which keeps its id, so channels and setlists that use it now get this sound). If the saved
+   *  tone is on amp channels, they are rewritten right away. Resolves false if cancelled. */
+  async save(asName?: string): Promise<boolean> {
+    const name = asName ?? this.tone.name
+    const key = name.trim().toLowerCase()
+    const selfId = asName === undefined ? this.tone.id : null
+    const clash = this.tones.find((t) => t.id !== selfId && t.name.trim().toLowerCase() === key)
+    if (clash) {
+      const ok = await new Promise<boolean>((done) => {
+        this.confirm = {
+          title: 'Overwrite tone?',
+          body: `A tone called "${clash.name}" already exists. Replace it with this sound?` +
+            (this.channelsOf(clash.id).length ? ` It is on ${this.channelsOf(clash.id).join(', ')}, which will be updated on the amp.` : ''),
+          actions: [
+            { label: 'Cancel', run: () => done(false) },
+            { label: 'Overwrite', primary: true, run: () => done(true) },
+          ],
+        }
+      })
+      if (!ok) return false
+      this.tone.id = clash.id
+      this.tone.created = clash.created
+      this.tone.tags = [...clash.tags]
+    } else if (asName !== undefined) {
       this.tone.id = uid()
-      this.tone.name = asName
       this.tone.created = now()
     }
+    this.tone.name = name
     this.tone.modified = now()
     this.tone.params['com.name'] = ampName(this.tone.name)
     const snapshot: Tone = JSON.parse(JSON.stringify(this.tone))
@@ -290,7 +313,24 @@ class Store {
     this.saved = JSON.stringify(this.tone.params)
     this.inLibrary = true
     backend.saveDoc('session', { toneId: snapshot.id })
-    this.toast(`Saved "${snapshot.name}"`)
+    const on = this.channelsOf(snapshot.id)
+    if (!on.length) this.toast(`Saved "${snapshot.name}"`)
+    else if (!this.amp.connected) this.toast(`Saved "${snapshot.name}". Connect the amp to update ${on.join(', ')}.`)
+    else await this.writeToChannels(snapshot, on)
+    return true
+  }
+
+  /** Channels (A1...) whose assigned tone is `id`. */
+  channelsOf(id: string) {
+    return channels.filter((c) => this.assignments[c.key] === id).map((c) => c.key)
+  }
+
+  /** Rewrite `keys` with `t`, ending on the channel the amp is on so it keeps playing there. */
+  private async writeToChannels(t: Tone, keys: string[]) {
+    const cur = channels.find((c) => c.patch === this.channel)?.key
+    const order = [...keys.filter((k) => k !== cur), ...keys.filter((k) => k === cur)]
+    for (const k of order) if (!(await this.writeTone(k, t))) return
+    this.toast(`Saved "${t.name}" and updated ${keys.join(', ')} on the amp`)
   }
 
   rename(name: string) {
