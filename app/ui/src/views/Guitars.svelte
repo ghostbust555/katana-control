@@ -111,7 +111,7 @@
   {@const d = g.deltas[row.ids[0]] ?? 0}
   {@const r = range(row.ids[0])}
   {@const p = param(row.ids[0])}
-  <Popover at={row.at} onclose={() => (editing = null)} width={420}>
+  <Popover at={row.at} onclose={() => (editing = null)} width={540}>
     <div class="row"><b class="grow">{row.label}</b><b class="big" class:zero={d === 0}>{d > 0 ? '+' : ''}{d}</b></div>
     <Stepper value={d} min={-r} max={r} label="{row.label} adjustment" centered onchange={(v) => setDelta(row.ids, v)} />
     <div class="row">

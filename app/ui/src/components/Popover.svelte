@@ -40,7 +40,9 @@
   .scrim { position: fixed; inset: 0; z-index: 70; background: #0005; }
   .pop {
     position: fixed; z-index: 71; max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain;
-    background: var(--panel); border: 1px solid #4a505b; border-radius: 14px; padding: 12px;
-    box-shadow: 0 14px 40px #000a; display: flex; flex-direction: column; gap: 10px;
+    background: var(--panel); border: 1px solid #4a505b; border-radius: 16px; padding: 16px;
+    box-shadow: 0 14px 40px #000a; display: flex; flex-direction: column; gap: 12px; font-size: 17px;
   }
+  /* Room for imprecise fingers: every control in a popover is at least 56px tall. */
+  .pop :global(button), .pop :global(input[type='text']), .pop :global(input[type='search']) { min-height: 56px; }
 </style>

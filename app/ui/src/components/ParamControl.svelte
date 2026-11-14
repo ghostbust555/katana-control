@@ -21,6 +21,12 @@
   const frac = $derived((num - p.min) / Math.max(1, p.max - p.min))
   const off = $derived(!!toggle && !toggle.value)
   const changed = $derived(effective !== undefined && effective !== value)
+  /** Displayed value split into number and unit, so the unit can be smaller. */
+  const shown = $derived.by(() => {
+    const t = p.enc === 'ascii' ? String(value).trimEnd() : format(p, value)
+    const m = isNumeric(p) && p.unit && t.endsWith(' ' + p.unit) ? t.slice(0, -p.unit.length - 1) : null
+    return m === null ? { n: t, u: '' } : { n: m, u: p.unit! }
+  })
 </script>
 
 {#if p.switch}
@@ -29,7 +35,7 @@
     <span class="row"><b class="val">{num ? 'On' : 'Off'}</b><span class="lever"></span></span>
   </button>
 {:else}
-  <div class="tile" class:paired={!!toggle} class:off>
+  <div class="tile" class:paired={!!toggle} class:off class:choice={!isNumeric(p)}>
     {#if toggle}
       <button class="pair-sw" class:on={!!toggle.value} role="switch" aria-checked={!!toggle.value} aria-label={toggle.p.label}
         onclick={() => toggle.onchange(toggle.value ? 0 : 1)}><span class="lever"></span></button>
@@ -37,17 +43,17 @@
     <button class="open" disabled={off} onclick={(e) => (at = pressAt(e))}>
       <span class="label">{p.label}</span>
       <span class="row">
-        <b class="val">{p.enc === 'ascii' ? String(value).trimEnd() : format(p, value)}</b>
+        <b class="val">{shown.n}{#if shown.u}<small>{shown.u}</small>{/if}</b>
         {#if changed}<span class="eff" title="Sent to the amp with the active guitar">→ {format(p, effective!)}</span>{/if}
         <span class="grow"></span>
-        {#if isNumeric(p)}<Knob {frac} />{:else if p.options}<span class="dim caret">▾</span>{/if}
+        {#if isNumeric(p)}<Knob {frac} size={44} />{:else if p.options}<span class="caret">▾</span>{/if}
       </span>
     </button>
   </div>
 {/if}
 
 {#if at}
-  <Popover {at} onclose={() => (at = null)} width={p.options && p.options.length > 8 ? 560 : 400}>
+  <Popover {at} onclose={() => (at = null)} width={p.options && p.options.length > 8 ? 640 : 540}>
     <div class="row head">
       <span class="grow ptitle">{p.label}</span>
       {#if !p.options && p.enc !== 'ascii'}<b class="big">{format(p, value)}</b>{/if}
@@ -70,25 +76,31 @@
 {/if}
 
 <style>
-  .tile { display: flex; align-items: stretch; min-width: 0; min-height: 64px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--r); }
-  .tile > .open, .tile.sw { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 2px; padding: 6px 12px; text-align: left; border: 0; background: transparent; }
+  /* --c is the section colour (set by the editor); falls back to the accent. */
+  .tile { display: flex; align-items: stretch; min-width: 0; min-height: 84px; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; }
+  .tile > .open, .tile.sw { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 4px; padding: 8px 14px; text-align: left; border: 0; border-radius: 12px; background: transparent; }
   .tile.sw { background: var(--panel2); border: 1px solid var(--line); }
-  .label { color: var(--dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Choices read as dropdowns: darker well, value first, caret. */
+  .tile.choice { background: var(--bg); border-style: dashed; border-color: #3d434d; }
+  .label { color: var(--dim); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row { gap: 8px; min-width: 0; }
-  .val { font-size: 17px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .eff { font-size: 13px; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .caret { font-size: 14px; }
+  .val { font-size: 22px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .choice .val { font-size: 18px; }
+  .val small { font-size: 13px; font-weight: 600; color: var(--dim); margin-left: 3px; }
+  .eff { font-size: 14px; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .caret { font-size: 18px; color: var(--c, var(--dim)); }
   .off .open { opacity: 0.45; }
   /* on/off lever, as in Toggle */
-  .lever { width: 40px; height: 24px; border-radius: 12px; background: var(--line); position: relative; flex: none; margin-left: auto; transition: background 0.15s; }
-  .lever::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dim); transition: transform 0.15s, background 0.15s; }
+  .lever { width: 48px; height: 28px; border-radius: 14px; background: var(--line); position: relative; flex: none; margin-left: auto; transition: background 0.15s; }
+  .lever::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--dim); transition: transform 0.15s, background 0.15s; }
   .on .lever { background: var(--accent-dim); }
-  .on .lever::after { transform: translateX(16px); background: var(--accent); }
-  .pair-sw { width: 64px; flex: none; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: var(--r) 0 0 var(--r); background: transparent; }
+  .on .lever::after { transform: translateX(20px); background: var(--accent); }
+  .sw.on .val { color: var(--accent); }
+  .pair-sw { width: 72px; flex: none; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 12px 0 0 12px; background: transparent; }
   .pair-sw .lever { margin: 0; }
   .head { gap: 12px; }
-  .ptitle { font-weight: 600; font-size: 17px; }
-  .big { font-size: 26px; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .ptitle { font-weight: 600; font-size: 19px; }
+  .big { font-size: 30px; font-variant-numeric: tabular-nums; color: var(--accent); }
   .foot { gap: 8px; }
-  .small { font-size: 13px; }
+  .small { font-size: 14px; }
 </style>

@@ -103,13 +103,13 @@
 {#if toneMenu}
   {@const t = toneMenu.t}
   {@const on = store.channelsOf(t.id)}
-  <Popover at={toneMenu.at} onclose={() => (toneMenu = null)} width={380}>
+  <Popover at={toneMenu.at} onclose={() => (toneMenu = null)} width={600}>
     <b class="mtitle">{t.name}</b>
     <div class="acts">
       <button class="primary" onclick={() => open(t)}>Open in editor</button>
       <button disabled={!ampReady} onclick={() => store.audition(t)}>▶ Play on amp</button>
     </div>
-    <span class="dim small">Channel</span>
+    <span class="dim">Channel</span>
     <div class="chans">
       {#each channels as c (c.key)}
         <button class:sel={on.includes(c.key)} aria-pressed={on.includes(c.key)}
@@ -166,12 +166,14 @@
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
   .chip.tag { color: var(--accent); }
   .empty-msg { text-align: center; margin-top: 40px; }
-  .mtitle { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mtitle { font-size: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The tone menu is the most-used popover: big, well-spaced targets. */
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .acts button, .chans button { min-height: 72px; font-size: 19px; border-radius: 14px; }
   .acts.four { grid-template-columns: repeat(4, 1fr); }
   .acts.four button { padding: 0 6px; }
-  .chans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .chans button { font-weight: 700; font-size: 17px; }
+  .chans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .chans button { font-weight: 700; font-size: 22px; }
   .chans .sel { background: var(--accent); border-color: var(--accent); color: #1a1206; }
   .hint { margin: 0; }
 </style>

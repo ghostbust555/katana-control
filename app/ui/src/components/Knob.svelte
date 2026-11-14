@@ -17,7 +17,7 @@
 
 <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
   <path d={arc(1)} class="track" />
-  {#if f > 0.001}<path d={arc(f)} class="val" />{/if}
+  {#if f > 0.001}<path d={arc(f)} class="val-arc" />{/if}
   <line x1={C} y1={C} x2={tip[0]} y2={tip[1]} class="ptr" />
 </svg>
 
@@ -25,6 +25,6 @@
   svg { flex: none; }
   path { fill: none; stroke-width: 2.6; stroke-linecap: round; }
   .track { stroke: #4a505b; }
-  .val { stroke: var(--accent); }
+  .val-arc { stroke: var(--c, var(--accent)); }
   .ptr { stroke: var(--text); stroke-width: 2.2; stroke-linecap: round; }
 </style>

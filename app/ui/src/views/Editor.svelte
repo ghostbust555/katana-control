@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import Choices from '../components/Choices.svelte'
   import ParamControl from '../components/ParamControl.svelte'
   import Popover from '../components/Popover.svelte'
   import Toggle from '../components/Toggle.svelte'
   import { pressAt, type Point } from '../lib/press'
-  import { COLOR_CSS, format, isNumeric, layout, param, variationIndex, visibleGroups } from '../lib/schema'
+  import { COLOR_CSS, format, layout, param, variationIndex, visibleGroups } from '../lib/schema'
+  import { CATS, sections } from '../lib/sections'
   import { store } from '../lib/store.svelte'
 
   const values = $derived(store.tone.params)
@@ -18,21 +20,17 @@
   const bodyGroups = $derived(typeParam ? groups.slice(1) : groups)
   let typeAt = $state<Point | null>(null)
 
-  /** A group's params as tiles; an `x_sw` switch followed by its `x_…` number becomes one
-   *  paired tile (toggle + control). */
-  function tiles(ids: string[]) {
-    const out: { id: string; sw?: string }[] = []
-    for (let i = 0; i < ids.length; i++) {
-      const id = ids[i]
-      const next = ids[i + 1]
-      const stem = id.endsWith('_sw') ? id.slice(0, -2) : null
-      if (stem && next?.startsWith(stem) && param(id).switch && isNumeric(param(next))) {
-        out.push({ id: next, sw: id })
-        i++
-      } else out.push({ id })
-    }
-    return out
-  }
+  // Full-size tiles when they fit; a block with too many controls to fit (e.g. Solo) switches
+  // to compact tiles rather than making you scroll.
+  let bodyEl: HTMLDivElement | undefined = $state()
+  let compact = $state(false)
+  $effect(() => {
+    void bodyGroups
+    compact = false
+    tick().then(() => {
+      if (bodyEl && bodyEl.scrollHeight > bodyEl.clientHeight + 2) compact = true
+    })
+  })
 
   const isOn = (key: string) => {
     const b = layout.find((x) => x.key === key)!
@@ -94,18 +92,25 @@
       {/if}
     </header>
 
-    <div class="body scroll">
-      {#each bodyGroups as g (g.label)}
-        {#if bodyGroups.length > 1 || g.label !== block.label}<h3 class="glabel">{g.label}</h3>{/if}
-        <div class="grid">
-          {#each tiles(g.params) as t (t.id)}
-            {@const sw = t.sw}
-            <ParamControl p={param(t.id)} value={values[t.id]} onchange={(v) => store.setParam(t.id, v)}
-              effective={deltas[t.id] ? store.effective(t.id) : undefined}
-              toggle={sw ? { p: param(sw), value: values[sw], onchange: (v) => store.setParam(sw, v) } : undefined} />
+    <div class="body scroll" class:compact bind:this={bodyEl}>
+      <!-- Sections from all groups share rows; with several groups each header names its group. -->
+      <div class="secs">
+        {#each bodyGroups as g (g.label)}
+          {#each sections(g.params) as sec (sec.cat)}
+            <section class="sec" style="--c:{CATS[sec.cat].color}; flex-grow:{sec.tiles.length}; flex-basis:{sec.tiles.length * 170}px">
+              <h4><span class="dot"></span>{#if bodyGroups.length > 1 || g.label !== block.label}<span class="gname">{g.label}</span>{/if}{CATS[sec.cat].label}</h4>
+              <div class="grid">
+                {#each sec.tiles as t (t.id)}
+                  {@const sw = t.sw}
+                  <ParamControl p={param(t.id)} value={values[t.id]} onchange={(v) => store.setParam(t.id, v)}
+                    effective={deltas[t.id] ? store.effective(t.id) : undefined}
+                    toggle={sw ? { p: param(sw), value: values[sw], onchange: (v) => store.setParam(sw, v) } : undefined} />
+                {/each}
+              </div>
+            </section>
           {/each}
-        </div>
-      {/each}
+        {/each}
+      </div>
     </div>
   </section>
 </div>
@@ -133,7 +138,20 @@
   .colors .sel { background: #2c2518; border-color: var(--accent); border-left-color: var(--c); font-weight: 600; }
   .type { display: flex; gap: 8px; align-items: center; min-width: 220px; justify-content: space-between; }
   .body { flex: 1; min-height: 0; padding: 12px 16px 20px; }
-  .glabel { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); margin: 14px 0 8px; }
-  .glabel:first-child { margin-top: 0; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+  /* Sections share rows, each sized by how many controls it has. */
+  .secs { display: flex; flex-wrap: wrap; gap: 12px; }
+  .sec { min-width: 180px; background: color-mix(in srgb, var(--c) 6%, var(--panel)); border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line));
+    border-top: 3px solid var(--c); border-radius: 12px; padding: 8px 10px 10px; }
+  .sec h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c); display: flex; align-items: center; gap: 6px; }
+  .gname { color: var(--text); margin-right: 2px; }
+  .gname::after { content: ' ·'; color: var(--dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .compact .secs { gap: 8px; }
+  .compact .sec { padding: 6px 8px 8px; }
+  .compact .sec h4 { margin-bottom: 6px; }
+  .compact :global(.tile) { min-height: 62px; }
+  .compact :global(.tile .open), .compact :global(.tile.sw) { padding: 4px 12px; gap: 2px; }
+  .compact :global(.tile .val) { font-size: 19px; }
+  .compact :global(.tile svg) { width: 34px; height: 34px; }
 </style>

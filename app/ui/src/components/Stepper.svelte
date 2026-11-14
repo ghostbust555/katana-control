@@ -36,8 +36,12 @@
 
 <style>
   .stepper { display: flex; align-items: center; gap: 10px; }
-  .step { width: 52px; min-height: 52px; padding: 0; font-size: 26px; flex: none; touch-action: none; }
-  input { flex: 1; min-width: 0; }
+  .stepper { gap: 14px; }
+  .step { width: 72px; min-height: 72px; padding: 0; font-size: 34px; flex: none; touch-action: none; border-radius: 14px; }
+  /* Bigger than the global slider: this is the one you drag. */
+  input { flex: 1; min-width: 0; height: 72px; }
+  input::-webkit-slider-runnable-track { height: 12px; border-radius: 6px; }
+  input::-webkit-slider-thumb { width: 46px; height: 46px; margin-top: -17px; border-width: 4px; }
   .centered::-webkit-slider-runnable-track {
     background: linear-gradient(to right, var(--line) var(--lo), var(--accent) var(--lo), var(--accent) var(--hi), var(--line) var(--hi));
   }
