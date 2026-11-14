@@ -56,3 +56,8 @@ katana-control tsl liveset.tsl            # list the tones in a .tsl file
 ```
 
 Global flags: `--port <substring>` (default `katana`), `--device-id`, `--model-id`.
+
+## License
+
+[GNU Lesser General Public License v3.0 or later](COPYING.LESSER). The LGPL adds terms on top of
+the [GNU GPL v3](COPYING), so both texts are included.

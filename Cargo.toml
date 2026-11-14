@@ -5,6 +5,7 @@ members = ["crates/katana-core", "crates/katana-cli", "app/src-tauri"]
 [workspace.package]
 version = "0.2.0"
 edition = "2024"
+license = "LGPL-3.0-or-later"
 
 [workspace.dependencies]
 anyhow = "1.0.104"
