@@ -13,6 +13,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod web;
+
 // ---- log: logs\<unix time>-studio.log next to the exe (on the share when run from there) ----
 
 static LOG: OnceLock<Mutex<fs::File>> = OnceLock::new();
@@ -340,6 +342,17 @@ fn delete_tone(app: AppHandle, id: String) -> CmdResult<()> {
     .map_err(err)
 }
 
+/// HTTP request for AI Studio's web tools; public hosts only (see web.rs).
+#[tauri::command]
+async fn http_request(
+    url: String,
+    method: Option<String>,
+    headers: Option<HashMap<String, String>>,
+    body: Option<String>,
+) -> CmdResult<web::Fetched> {
+    web::request(url, method, headers, body).await
+}
+
 #[tauri::command]
 fn load_doc(app: AppHandle, name: String) -> CmdResult<Option<Value>> {
     let path = data_dir(&app)?.join(format!("{}.json", safe_name(&name)?));
@@ -367,6 +380,7 @@ fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
+            http_request,
             list_ports,
             connect,
             disconnect,

@@ -11,6 +11,10 @@ export interface Liveset {
   patches: { name: string; memo: string; values: Values }[]
 }
 
+/** HTTP request made by the app (AI Studio's web tools), public hosts only. */
+export interface HttpRequest { url: string; method?: string; headers?: Record<string, string>; body?: string }
+export interface HttpResponse { url: string; status: number; contentType: string; body: string; truncated: boolean }
+
 export type AmpEvent =
   | { kind: 'param'; id: string; value: Value }
   | { kind: 'patchSelected'; number: number }
@@ -28,6 +32,7 @@ export interface Backend {
   selectPatch(patch: number): Promise<void>
   currentPatch(): Promise<number>
   importTsl(text: string): Promise<Liveset>
+  httpRequest(req: HttpRequest): Promise<HttpResponse>
   setDeltas(deltas: Record<string, number>): Promise<void>
   listTones(): Promise<unknown[]>
   saveTone(tone: unknown): Promise<void>
@@ -70,6 +75,7 @@ const tauri: Backend = {
   selectPatch: (patch) => call('select_patch', { patch }),
   currentPatch: () => call('current_patch'),
   importTsl: (text) => call('import_tsl', { text }),
+  httpRequest: (r) => call('http_request', { url: r.url, method: r.method ?? null, headers: r.headers ?? null, body: r.body ?? null }),
   setDeltas: (deltas) => call('set_deltas', { deltas }),
   listTones: () => call('list_tones'),
   saveTone: (tone) => call('save_tone', { tone }),
@@ -103,6 +109,11 @@ function mockBackend(): Backend {
     selectPatch: async () => void (await sleep(50)),
     currentPatch: async () => (await sleep(50), 1),
     // The demo can't decode .tsl files (the Rust core does); it pretends with two tones.
+    // In a plain browser only sites that allow cross-origin requests work.
+    httpRequest: async (r) => {
+      const res = await fetch(r.url, { method: r.method ?? 'GET', headers: r.headers, body: r.body })
+      return { url: res.url, status: res.status, contentType: res.headers.get('content-type') ?? '', body: await res.text(), truncated: false }
+    },
     importTsl: async (text) => {
       const name = (JSON.parse(text) as { name?: string }).name ?? 'Liveset'
       return { name, patches: [1, 2].map((i) => ({ name: `${name} ${i}`, memo: '', values: { ...defaults(), 'amp.gain': 30 + i * 20 } })) }

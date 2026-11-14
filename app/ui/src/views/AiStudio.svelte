@@ -18,6 +18,12 @@
   let open = $state<Record<number, boolean>>({})
   // Settings form: per-provider edits survive switching back and forth before saving.
   let drafts: Record<string, LlmSettings> = {}
+  let search = $state({ engine: 'auto' as 'auto' | 'openrouter' | 'tavily' | 'off', tavilyKey: '' })
+  const SEARCH_ENGINES = [
+    ['auto', 'Automatic'], ['openrouter', 'OpenRouter'], ['tavily', 'Tavily'], ['off', 'Off'],
+  ] as const
+  /** The OpenRouter key as currently typed in the form (it is used for search too). */
+  const orKey = $derived(form.provider === 'openrouter' ? form.apiKey : (drafts.openrouter?.apiKey ?? ai.settingsFor('openrouter').apiKey))
   let models = $state<ModelInfo[] | null>(null)
   let modelsMsg = $state('')
   let modelQuery = $state('')
@@ -68,7 +74,7 @@
 
   // The setup screen edits the chosen provider's settings.
   $effect(() => {
-    if (ai.loaded && !ai.ready) form = { ...ai.settings }
+    if (ai.loaded && !ai.ready) { form = { ...ai.settings }; search = { ...ai.search } }
   })
 
   // Keep the newest message in view while it streams.
@@ -96,12 +102,22 @@
   }
   function openSettings(e: MouseEvent) {
     form = { ...ai.settings }
+    drafts = {}
+    search = { ...ai.search }
     settingsAt = pressAt(e)
   }
   async function saveSettings() {
-    await ai.saveSettings(form)
+    await ai.saveSettings(form, search, Object.values(drafts).filter((d) => d.provider !== form.provider))
     settingsAt = null
   }
+  const searchNote = $derived.by(() => {
+    if (search.engine === 'off') return 'The model works from its own knowledge and your tones only.'
+    if (search.engine === 'tavily' || (search.engine === 'auto' && search.tavilyKey)) {
+      return search.tavilyKey ? 'Searches with Tavily (free tier: 1,000 searches a month).' : 'Enter a Tavily key (tavily.com).'
+    }
+    return orKey ? 'Searches through OpenRouter with your OpenRouter key, whichever model you use (Exa, about $0.007 a search).'
+      : 'Needs an OpenRouter key (set it under OpenRouter above) or a Tavily key.'
+  })
   const isCurrent = (e: ChatEntry) => !!e.snapshot && JSON.stringify(e.snapshot) === current
   const provider = $derived(providers.find((p) => p.id === form.provider) ?? providers[0])
 </script>
@@ -145,6 +161,17 @@
     </div>
   {/if}
   {#if provider.hint}<p class="dim small">{provider.hint}</p>{/if}
+  <span class="dim">Web search (for looking up songs and gear)</span>
+  <div class="provs four">
+    {#each SEARCH_ENGINES as [id, label] (id)}
+      <button class:sel={search.engine === id} onclick={() => (search.engine = id)}>{label}</button>
+    {/each}
+  </div>
+  {#if search.engine === 'tavily' || search.engine === 'auto'}
+    <label class="field"><span class="dim">Tavily API key (optional{search.engine === 'tavily' ? '' : '; used instead of OpenRouter when set'})</span>
+      <input type="password" placeholder="tvly-…" bind:value={search.tavilyKey} autocomplete="off" /></label>
+  {/if}
+  <p class="dim small">{searchNote}</p>
 {/snippet}
 
 <div class="studio">
@@ -156,7 +183,7 @@
         <h2>Set up AI Studio</h2>
         <p class="dim">AI Studio needs a language model. Pick one and enter its details.</p>
         {@render settingsForm()}
-        <button class="primary big" onclick={() => ai.saveSettings(form)}>Save and start</button>
+        <button class="primary big" onclick={() => ai.saveSettings(form, search, Object.values(drafts).filter((d) => d.provider !== form.provider))}>Save and start</button>
       </div>
     {:else}
       <div class="log scroll" bind:this={log}>
@@ -173,6 +200,9 @@
           <div class="msg {e.role}" class:error={e.error}>
             {#if e.text}<p class="text">{e.text}</p>{/if}
             {#if e.pending && ai.status}<p class="status">{ai.status}</p>{/if}
+            {#if e.sources?.length}
+              <p class="sources">{e.sources.join(' · ')}</p>
+            {/if}
             {#if e.changes?.length}
               <div class="row chg">
                 <button class="ghost small" onclick={() => (open[e.id] = !open[e.id])}>
@@ -264,6 +294,8 @@
   .model span { overflow-wrap: anywhere; }
   .model.sel { border-color: var(--accent); background: var(--accent-dim); }
   input[type='search'] { min-height: 52px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); }
+  .provs.four { grid-template-columns: repeat(4, 1fr); }
+  .sources { margin: 8px 0 0; font-size: 13px; color: var(--dim); }
   .provs button { min-height: 60px; white-space: normal; line-height: 1.2; padding: 4px 10px; }
   .provs button.sel { background: var(--accent-dim); border-color: var(--accent); }
   .field { display: flex; flex-direction: column; gap: 4px; }
