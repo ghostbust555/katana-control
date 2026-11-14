@@ -1,7 +1,7 @@
 <script lang="ts">
   import Popover from '../components/Popover.svelte'
   import { pressAt, type Point } from '../lib/press'
-  import { channels, format, layout, param } from '../lib/schema'
+  import { channels, chStyle, format, layout, param } from '../lib/schema'
   import { store, type Tone } from '../lib/store.svelte'
 
   let query = $state('')
@@ -59,7 +59,7 @@
     <div class="slots">
       {#each channels as c (c.key)}
         {@const t = toneOf(store.assignments[c.key])}
-        <button class="slot" class:empty={!t} class:onamp={store.channel === c.patch} onclick={(e) => (slotMenu = { key: c.key, at: pressAt(e) })}>
+        <button class="slot" class:empty={!t} class:onamp={store.channel === c.patch} style={chStyle(c.key)} onclick={(e) => (slotMenu = { key: c.key, at: pressAt(e) })}>
           <span class="ch">{c.key}</span>
           <span class="grow tn">{t?.name ?? 'Empty'}</span>
           <span class="dim">⋯</span>
@@ -87,7 +87,7 @@
           onclick={(e) => (toneMenu = { t, at: pressAt(e) })}>
           <span class="row top">
             <b class="grow tname">{t.name}</b>
-            {#each on as k}<span class="onch">{k}</span>{/each}
+            {#each on as k}<span class="chbadge" style={chStyle(k)}>{k}</span>{/each}
           </span>
           <span class="dim small">{ampType(t)} · {when(t.modified)}</span>
           <span class="chips">
@@ -112,7 +112,7 @@
     <span class="dim">Channel</span>
     <div class="chans">
       {#each channels as c (c.key)}
-        <button class:sel={on.includes(c.key)} aria-pressed={on.includes(c.key)}
+        <button class="chbtn" class:sel={on.includes(c.key)} style={chStyle(c.key)} aria-pressed={on.includes(c.key)}
           title={on.includes(c.key) ? `Remove from ${c.key}` : `Assign to ${c.key} (was ${toneOf(store.assignments[c.key])?.name ?? 'empty'})`}
           onclick={() => store.assign(c.key, on.includes(c.key) ? null : t.id)}>{c.key}</button>
       {/each}
@@ -130,7 +130,7 @@
   {@const key = slotMenu.key}
   {@const t = toneOf(store.assignments[key])}
   <Popover at={slotMenu.at} onclose={() => (slotMenu = null)} width={320}>
-    <b class="mtitle"><span class="ch">{key}</span> {t?.name ?? 'Empty'}</b>
+    <b class="mtitle"><span class="chtext" style={chStyle(key)}>{key}</span> {t?.name ?? 'Empty'}</b>
     {#if t}
       <button class="primary" disabled={!ampReady} onclick={() => { slotMenu = null; store.writeChannel(key) }}>Write to amp</button>
       <button onclick={() => open(t)}>Open in editor</button>
@@ -147,9 +147,10 @@
   .chead { margin-bottom: 10px; flex-wrap: wrap; }
   .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .slot { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 12px; text-align: left; min-width: 0; }
-  .slot.onamp { border-color: var(--accent); }
+  .slot { border-left: 5px solid var(--ch); background: color-mix(in srgb, var(--ch) 7%, var(--panel2)); }
+  .slot.onamp { border-color: var(--ch); box-shadow: 0 0 0 1px var(--ch) inset; }
   .slot.empty .tn { color: var(--dim); font-style: italic; }
-  .ch { font-weight: 700; color: var(--accent); font-size: 20px; }
+  .ch { font-weight: 700; color: var(--ch); font-size: 20px; }
   .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
   .tools { flex: none; }
   .tools input { flex: 1; }
@@ -160,7 +161,6 @@
   .tone.sel { background: #2c2518; }
   .top { gap: 6px; }
   .tname { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .onch { font-size: 12px; font-weight: 700; color: #1a1206; background: var(--accent); border-radius: 6px; padding: 2px 6px; }
   .small { font-size: 13px; }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
@@ -174,6 +174,5 @@
   .acts.four button { padding: 0 6px; }
   .chans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .chans button { font-weight: 700; font-size: 22px; }
-  .chans .sel { background: var(--accent); border-color: var(--accent); color: #1a1206; }
   .hint { margin: 0; }
 </style>

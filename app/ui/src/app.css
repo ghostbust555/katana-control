@@ -11,6 +11,11 @@
   --accent-dim: #6b4c1f;
   --danger: #e0483e;
   --ok: #3fbf5f;
+  /* Channel colours, used wherever a channel is shown: muted rather than primary. */
+  --ch-A1: #e4675f;
+  --ch-A2: #e6bf55;
+  --ch-B1: #5c9fe0;
+  --ch-B2: #55bf8c;
   --r: 10px;
   --tap: 44px;
   font-family: 'Segoe UI', system-ui, sans-serif;
@@ -82,3 +87,13 @@ input[type='range']::-webkit-slider-thumb {
   background: var(--text);
   border: 3px solid var(--accent);
 }
+
+/* Channel styling: put style={chStyle(key)} on the element (sets --ch). */
+.chtext { color: var(--ch); font-weight: 700; }
+.chbadge {
+  display: inline-block; font-size: 12px; font-weight: 700; line-height: 1.4; padding: 1px 7px; border-radius: 6px;
+  color: var(--ch); background: color-mix(in srgb, var(--ch) 18%, transparent); border: 1px solid color-mix(in srgb, var(--ch) 50%, transparent);
+}
+/* A channel as a button: tinted; filled with its colour when selected. */
+button.chbtn { color: var(--ch); font-weight: 700; background: color-mix(in srgb, var(--ch) 10%, var(--panel2)); border-color: color-mix(in srgb, var(--ch) 45%, var(--line)); }
+button.chbtn.sel { color: #15171b; border-color: var(--ch); background: linear-gradient(180deg, color-mix(in srgb, var(--ch) 82%, white), var(--ch)); }

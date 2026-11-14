@@ -2,7 +2,7 @@
   import Choices from '../components/Choices.svelte'
   import Popover from '../components/Popover.svelte'
   import { pressAt, type Point } from '../lib/press'
-  import { channels } from '../lib/schema'
+  import { channels, chStyle } from '../lib/schema'
   import { store, type Song } from '../lib/store.svelte'
 
   let selectedId = $state<string | null>(store.liveSong?.setlistId ?? store.setlists[0]?.id ?? null)
@@ -84,8 +84,8 @@
             <div class="chans">
               {#each channels as c (c.key)}
                 {@const n = toneName(song.channels[c.key])}
-                <button class="chan" class:none={!n} onclick={(e) => (picking = { song, key: c.key, at: pressAt(e) })}>
-                  <span class="ck">{c.key}</span><span class="tn">{n ?? 'Keep'}</span>
+                <button class="chan" class:none={!n} style={chStyle(c.key)} onclick={(e) => (picking = { song, key: c.key, at: pressAt(e) })}>
+                  <span class="ck chtext">{c.key}</span><span class="tn">{n ?? 'Keep'}</span>
                 </button>
               {/each}
             </div>
@@ -120,7 +120,7 @@
               <span class="pchans">
                 {#each channels as c (c.key)}
                   {@const n = toneName(song.channels[c.key])}
-                  <span class="pc" class:none={!n}><b>{c.key}</b> {n ?? '–'}</span>
+                  <span class="pc" class:none={!n} style={chStyle(c.key)}><b>{c.key}</b> {n ?? '–'}</span>
                 {/each}
               </span>
             </button>
@@ -183,9 +183,9 @@
   .sbtn { display: flex; align-items: center; gap: 10px; text-align: left; background: transparent; border-color: transparent; padding: 0 6px; }
   .sn { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .macts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .chan { display: flex; gap: 8px; align-items: center; padding: 0 10px; text-align: left; background: var(--bg); min-width: 0; }
+  .chan { display: flex; gap: 8px; align-items: center; padding: 0 10px; text-align: left; background: var(--bg); min-width: 0; border-left: 4px solid var(--ch); }
   .chan.none .tn { color: var(--dim); font-style: italic; }
-  .ck { font-weight: 700; color: var(--accent); flex: none; }
+  .ck { flex: none; }
   .tn { overflow: hidden; text-overflow: ellipsis; }
   .addsong { flex: none; border-style: dashed; min-height: 56px; }
 
@@ -204,7 +204,8 @@
   .badge { font-size: 12px; font-weight: 700; color: #1a1206; background: var(--accent); border-radius: 6px; padding: 2px 6px; }
   .pchans { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .pc { font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pc b { color: var(--accent); }
+  .pc { border-left: 3px solid var(--ch); }
+  .pc b { color: var(--ch); }
   .pc.none { color: var(--dim); }
   .empty { margin: auto; max-width: 460px; text-align: center; display: flex; flex-direction: column; gap: 16px; align-items: center; }
 </style>

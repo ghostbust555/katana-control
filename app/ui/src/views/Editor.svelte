@@ -146,7 +146,7 @@
   .gname { color: var(--text); margin-right: 2px; }
   .gname::after { content: ' ·'; color: var(--dim); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
   .compact .secs { gap: 8px; }
   .compact .sec { padding: 6px 8px 8px; }
   .compact .sec h4 { margin-bottom: 6px; }

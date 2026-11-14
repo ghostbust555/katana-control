@@ -2,7 +2,7 @@
   import { backend } from './lib/backend'
   import Popover from './components/Popover.svelte'
   import { pressAt, type Point } from './lib/press'
-  import { channels } from './lib/schema'
+  import { channels, chStyle } from './lib/schema'
   import { PATCH_NAMES, store, type View } from './lib/store.svelte'
   import Editor from './views/Editor.svelte'
   import Guitars from './views/Guitars.svelte'
@@ -126,7 +126,7 @@
       {#if store.amp.connected}
         <button class="chip-btn chan" onclick={(e) => (channelMenu = pressAt(e))} title="Channel the amp is on: tap to switch">
           {#if store.channel !== null}
-            <b>{chName(store.channel)}</b><span class="cname">{store.channelTone(store.channel) ?? ''}</span>
+            <b class="chtext" style={chStyle(chName(store.channel))}>{chName(store.channel)}</b><span class="cname">{store.channelTone(store.channel) ?? ''}</span>
           {:else}<span class="dim">Channel ?</span>{/if}
           <span class="dim">▾</span>
         </button>
@@ -138,8 +138,8 @@
         <Popover at={channelMenu} onclose={() => (channelMenu = null)} width={300}>
           <b>Amp channel</b>
           {#each channels as c (c.key)}
-            <button class="item" class:sel={store.channel === c.patch} disabled={!!store.amp.busy} onclick={() => store.selectChannel(c.key)}>
-              <b class="ck">{c.key}</b> <span class="dim">{store.channelTone(c.patch) ?? 'Unknown tone'}</span>
+            <button class="item" class:sel={store.channel === c.patch} style={chStyle(c.key)} disabled={!!store.amp.busy} onclick={() => store.selectChannel(c.key)}>
+              <b class="chtext ck">{c.key}</b> <span class="dim">{store.channelTone(c.patch) ?? 'Unknown tone'}</span>
             </button>
           {/each}
         </Popover>
@@ -227,10 +227,11 @@
   .conn { display: flex; align-items: center; gap: 8px; }
   .dotonly { width: 28px; padding: 0; justify-content: center; }
   .chan { display: flex; align-items: center; gap: 8px; max-width: 280px; }
-  .chan b { color: var(--accent); }
+
   .item { text-align: left; }
   .item.sel { border-color: var(--accent); background: #2c2518; }
-  .ck { color: var(--accent); margin-right: 6px; }
+  .item.sel[style] { border-color: var(--ch); background: color-mix(in srgb, var(--ch) 14%, var(--panel2)); }
+  .ck { margin-right: 6px; }
   .cname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
   .conn.on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }

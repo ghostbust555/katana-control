@@ -48,6 +48,8 @@ export const layout: Block[] = s.layout
 export const allChannels: Channel[] = s.channels
 /** The channels this amp's panel has (KATANA Gen 3: A/B banks, channels 1 and 2 in use). */
 export const channels: Channel[] = s.channels.filter((c) => ['A1', 'A2', 'B1', 'B2'].includes(c.key))
+/** Sets --ch to a channel's colour (A1 red, A2 yellow, B1 blue, B2 green; others grey). */
+export const chStyle = (key: string) => `--ch: var(--ch-${key}, var(--dim))`
 
 export const byId = new Map(params.map((p) => [p.id, p]))
 export const param = (id: string): Param => {

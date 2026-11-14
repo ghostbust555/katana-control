@@ -17,6 +17,9 @@
   } = $props()
 
   let at = $state<Point | null>(null)
+  // A number tile wide enough for the popover's slider shows the slider in place.
+  let tw = $state(0)
+  const inline = $derived(isNumeric(p) && tw >= 440)
   const num = $derived(typeof value === 'number' ? value : Number(p.init))
   const frac = $derived((num - p.min) / Math.max(1, p.max - p.min))
   const off = $derived(!!toggle && !toggle.value)
@@ -35,11 +38,21 @@
     <span class="row"><b class="val">{num ? 'On' : 'Off'}</b><span class="lever"></span></span>
   </button>
 {:else}
-  <div class="tile" class:paired={!!toggle} class:off class:choice={!isNumeric(p)}>
+  <div class="tile" class:paired={!!toggle} class:off class:choice={!isNumeric(p)} bind:clientWidth={tw}>
     {#if toggle}
       <button class="pair-sw" class:on={!!toggle.value} role="switch" aria-checked={!!toggle.value} aria-label={toggle.p.label}
         onclick={() => toggle.onchange(toggle.value ? 0 : 1)}><span class="lever"></span></button>
     {/if}
+    {#if inline}
+      <div class="inl" inert={off}>
+        <button class="inl-head" title="Tap for reset and range" onclick={(e) => (at = pressAt(e))}>
+          <span class="label grow">{p.label}</span>
+          {#if changed}<span class="eff" title="Sent to the amp with the active guitar">→ {format(p, effective!)}</span>{/if}
+          <b class="val">{shown.n}{#if shown.u}<small>{shown.u}</small>{/if}</b>
+        </button>
+        <Stepper inline value={num} min={p.min} max={p.max} label={p.label} onchange={(v) => onchange(v)} />
+      </div>
+    {:else}
     <button class="open" disabled={off} onclick={(e) => (at = pressAt(e))}>
       <span class="label">{p.label}</span>
       <span class="row">
@@ -49,6 +62,7 @@
         {#if isNumeric(p)}<Knob {frac} size={44} />{:else if p.options}<span class="caret">▾</span>{/if}
       </span>
     </button>
+    {/if}
   </div>
 {/if}
 
@@ -89,7 +103,10 @@
   .val small { font-size: 13px; font-weight: 600; color: var(--dim); margin-left: 3px; }
   .eff { font-size: 14px; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .caret { font-size: 18px; color: var(--c, var(--dim)); }
-  .off .open { opacity: 0.45; }
+  .off .open, .off .inl { opacity: 0.45; }
+  .inl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px 12px 6px; }
+  .inl-head { display: flex; align-items: baseline; gap: 10px; min-height: 0; padding: 4px 0 0; border: 0; background: transparent; text-align: left; }
+  .inl-head .val { color: var(--c, var(--accent)); }
   /* on/off lever, as in Toggle */
   .lever { width: 48px; height: 28px; border-radius: 14px; background: var(--line); position: relative; flex: none; margin-left: auto; transition: background 0.15s; }
   .lever::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--dim); transition: transform 0.15s, background 0.15s; }
