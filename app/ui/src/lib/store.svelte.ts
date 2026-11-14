@@ -290,16 +290,8 @@ class Store {
     } finally {
       this.amp.busy = ''
     }
+    // The editor is left as it is; Load from amp / Send to amp are explicit toolbar buttons.
     await this.loadChannelsFromAmp()
-    this.confirm = {
-      title: 'Amp connected',
-      body: 'Load the sound that is on the amp now into the editor, or send the editor tone to the amp?',
-      actions: [
-        { label: 'Leave both', run: () => {} },
-        { label: 'Send editor tone', run: () => this.sendToAmp() },
-        { label: 'Load from amp', primary: true, run: () => this.pullFromAmp() },
-      ],
-    }
   }
 
   /** Read A1/A2/B1/B2 from the amp and show them in the channel slots. A channel whose sound

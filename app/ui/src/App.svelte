@@ -69,10 +69,17 @@
           <button onclick={saveAs}>Save as new…</button>
           <button onclick={() => store.newTone()}>New tone</button>
           <button disabled={!store.dirty} onclick={() => store.revert()}>Revert changes</button>
-          <button disabled={!store.amp.connected} onclick={() => store.pullFromAmp()}>Load from amp</button>
-          <button disabled={!store.amp.connected} onclick={() => store.sendToAmp()}>Send to amp</button>
         </div>
       </details>
+
+      <button class="icon arrow" title="Load from amp: replace the editor tone with the amp's current sound"
+        aria-label="Load from amp" disabled={!store.amp.connected || !!store.amp.busy} onclick={() => store.pullFromAmp()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v13M6 11l6 6 6-6M5 21h14" /></svg>
+      </button>
+      <button class="icon arrow" title="Send to amp: put the editor tone on the amp"
+        aria-label="Send to amp" disabled={!store.amp.connected || !!store.amp.busy} onclick={() => store.sendToAmp()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V7M6 13l6-6 6 6M5 3h14" /></svg>
+      </button>
 
       <span class="grow"></span>
       {#if store.amp.busy}<span class="busy"><span class="spin"></span>{store.amp.busy}</span>{/if}
@@ -152,6 +159,8 @@
   .tname { font-size: 20px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
   .mod { color: var(--accent); font-size: 14px; }
   .icon { width: var(--tap); padding: 0; font-size: 22px; }
+  .arrow { display: grid; place-items: center; }
+  .arrow svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .menu { position: relative; }
   .menu summary { list-style: none; min-height: var(--tap); display: flex; align-items: center; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
   .menu summary::-webkit-details-marker { display: none; }
