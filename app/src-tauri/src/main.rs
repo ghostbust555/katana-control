@@ -255,6 +255,12 @@ async fn current_patch(app: AppHandle) -> CmdResult<u16> {
     .map_err(err)?
 }
 
+/// Decode a Tone Studio `.tsl` liveset (file text) into tones' values.
+#[tauri::command]
+fn import_tsl(text: String) -> CmdResult<katana_core::tsl::Liveset> {
+    katana_core::tsl::parse(&text).map_err(err)
+}
+
 #[tauri::command]
 fn select_patch(state: State<AppState>, patch: u8) -> CmdResult<()> {
     session(&state)?
@@ -371,6 +377,7 @@ fn main() {
             write_channel,
             select_patch,
             current_patch,
+            import_tsl,
             set_deltas,
             list_tones,
             save_tone,

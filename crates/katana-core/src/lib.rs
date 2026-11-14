@@ -6,3 +6,4 @@ pub mod capture;
 pub mod roland;
 pub mod schema;
 pub mod session;
+pub mod tsl;

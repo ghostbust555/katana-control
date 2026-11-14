@@ -52,6 +52,8 @@ enum Cmd {
         #[arg(long)]
         summary: bool,
     },
+    /// Decode a Tone Studio liveset (.tsl) and list its patches
+    Tsl { file: PathBuf },
 }
 
 fn target(cli: &Cli) -> Result<Target> {
@@ -152,6 +154,7 @@ impl Cmd {
             Cmd::Read { .. } => "read",
             Cmd::Write { .. } => "write",
             Cmd::Decode { .. } => "decode",
+            Cmd::Tsl { .. } => "tsl",
         }
     }
 }
@@ -229,6 +232,23 @@ fn run(cli: &Cli) -> Result<()> {
             let mut amp = Amp::open(&cli.port)?;
             amp.send(&roland::dt1(&t, parse_addr(addr)?, &parse_hex(data)?))?;
             amp.drain(Duration::from_millis(300), ml);
+        }
+        Cmd::Tsl { file } => {
+            let set = katana_core::tsl::parse(&std::fs::read_to_string(file)?)?;
+            println!("{:?}: {} patches", set.name, set.patches.len());
+            let show = |v: &BTreeMap<String, katana_core::schema::Value>, id: &str| {
+                v.get(id).map(|x| x.to_string()).unwrap_or_default()
+            };
+            for (i, p) in set.patches.iter().enumerate() {
+                println!(
+                    "{:3}  {:16}  amp.type={} gain={} volume={}",
+                    i + 1,
+                    p.name,
+                    show(&p.values, "amp.type"),
+                    show(&p.values, "amp.gain"),
+                    show(&p.values, "amp.volume")
+                );
+            }
         }
         Cmd::Decode { capture, summary } => {
             let events = capture::read_midi_events(capture)?;

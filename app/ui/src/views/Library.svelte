@@ -4,6 +4,7 @@
 
   let query = $state('')
   let assigning = $state<Tone | null>(null)
+  let fileInput: HTMLInputElement | undefined = $state()
 
   const shown = $derived(
     store.tones.filter((t) => {
@@ -60,6 +61,9 @@
   <div class="row tools">
     <input type="search" placeholder="Search tones or tags" bind:value={query} />
     <button onclick={() => { store.newTone(); store.view = 'editor' }}>New tone</button>
+    <button onclick={() => fileInput?.click()} title="Import tones from BOSS Tone Studio / Tone Exchange liveset files">Import .tsl…</button>
+    <input bind:this={fileInput} type="file" accept=".tsl" multiple hidden
+      onchange={(e) => { const fs = [...(e.currentTarget.files ?? [])]; e.currentTarget.value = ''; if (fs.length) store.importTsl(fs) }} />
   </div>
 
   <div class="tones scroll">

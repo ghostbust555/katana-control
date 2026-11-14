@@ -5,6 +5,12 @@ import { listen } from '@tauri-apps/api/event'
 import { defaults, type Value } from './schema'
 
 export type Values = Record<string, Value>
+/** A Tone Studio liveset (.tsl) decoded by the backend. */
+export interface Liveset {
+  name: string
+  patches: { name: string; memo: string; values: Values }[]
+}
+
 export type AmpEvent =
   | { kind: 'param'; id: string; value: Value }
   | { kind: 'patchSelected'; number: number }
@@ -21,6 +27,7 @@ export interface Backend {
   writeChannel(patch: number, values: Values): Promise<void>
   selectPatch(patch: number): Promise<void>
   currentPatch(): Promise<number>
+  importTsl(text: string): Promise<Liveset>
   setDeltas(deltas: Record<string, number>): Promise<void>
   listTones(): Promise<unknown[]>
   saveTone(tone: unknown): Promise<void>
@@ -62,6 +69,7 @@ const tauri: Backend = {
   writeChannel: (patch, values) => call('write_channel', { patch, values }),
   selectPatch: (patch) => call('select_patch', { patch }),
   currentPatch: () => call('current_patch'),
+  importTsl: (text) => call('import_tsl', { text }),
   setDeltas: (deltas) => call('set_deltas', { deltas }),
   listTones: () => call('list_tones'),
   saveTone: (tone) => call('save_tone', { tone }),
@@ -94,6 +102,11 @@ function mockBackend(): Backend {
     writeChannel: async () => void (await sleep(700)),
     selectPatch: async () => void (await sleep(50)),
     currentPatch: async () => (await sleep(50), 1),
+    // The demo can't decode .tsl files (the Rust core does); it pretends with two tones.
+    importTsl: async (text) => {
+      const name = (JSON.parse(text) as { name?: string }).name ?? 'Liveset'
+      return { name, patches: [1, 2].map((i) => ({ name: `${name} ${i}`, memo: '', values: { ...defaults(), 'amp.gain': 30 + i * 20 } })) }
+    },
     setDeltas: async () => {},
     listTones: async () =>
       Object.keys(localStorage)

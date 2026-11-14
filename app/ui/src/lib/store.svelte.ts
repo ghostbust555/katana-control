@@ -338,6 +338,34 @@ class Store {
     this.setParam('com.name', ampName(name))
   }
 
+  /** Add the tones in Tone Studio liveset files (.tsl) to the library, tagged with the
+   *  liveset's name. Tones whose sound is already in the library are skipped. */
+  async importTsl(files: File[]) {
+    const added: Tone[] = []
+    let dupes = 0
+    for (const f of files) {
+      try {
+        const set = await backend.importTsl(await f.text())
+        const tag = set.name.trim() || f.name.replace(/\.tsl$/i, '')
+        for (const [i, p] of set.patches.entries()) {
+          const values = { ...defaults(), ...p.values }
+          if ([...this.tones, ...added].some((t) => sameParams({ ...defaults(), ...t.params }, values))) { dupes++; continue }
+          const t = newTone(p.name.trim() || `${tag} ${i + 1}`, values)
+          t.tags = [tag]
+          t.notes = p.memo
+          await backend.saveTone(t)
+          added.push(t)
+        }
+      } catch (e) {
+        this.toast(`${f.name}: ${e}`, 'error')
+      }
+    }
+    this.tones = [...added, ...this.tones] // newest first, in the file's order
+    if (added.length || dupes) {
+      this.toast(`Imported ${added.length} tone${added.length === 1 ? '' : 's'}` + (dupes ? ` (${dupes} already in the library)` : ''))
+    }
+  }
+
   async duplicate(t: Tone) {
     const copy = { ...JSON.parse(JSON.stringify(t)), id: uid(), name: `${t.name} copy`, created: now(), modified: now() }
     await backend.saveTone(copy)
