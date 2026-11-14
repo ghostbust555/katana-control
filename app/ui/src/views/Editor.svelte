@@ -36,6 +36,13 @@
     const b = layout.find((x) => x.key === key)!
     return b.switch ? !!values[b.switch] : true
   }
+  // Blocks that are switched off are hidden from the chain unless asked for (remembered on
+  // this device). The open block always stays, so turning it off doesn't make it vanish.
+  const SHOW_OFF = 'katana.editor.showOff'
+  let showOff = $state(localStorage.getItem(SHOW_OFF) === '1')
+  $effect(() => localStorage.setItem(SHOW_OFF, showOff ? '1' : '0'))
+  const chain = $derived(showOff ? layout : layout.filter((b) => isOn(b.key) || b.key === store.block))
+  const offCount = $derived(layout.filter((b) => !isOn(b.key)).length)
   /** Short subtitle for a chain tile: the selected type, if the block has one. */
   function subtitle(key: string) {
     const b = layout.find((x) => x.key === key)!
@@ -46,8 +53,13 @@
 </script>
 
 <div class="editor">
+  <div class="chain-row">
+  <button class="show-off" class:on={showOff} role="switch" aria-checked={showOff} onclick={() => (showOff = !showOff)}
+    title="Show blocks that are switched off">
+    <span class="lever"></span><span class="so-txt">Off blocks<small>{showOff ? 'Shown' : `${offCount} hidden`}</small></span>
+  </button>
   <nav class="chain scroll-x" aria-label="Signal chain">
-    {#each layout as b (b.key)}
+    {#each chain as b (b.key)}
       <div class="tile" class:sel={b.key === store.block} class:off={!isOn(b.key)}>
         {#if b.switch}
           <button class="led-btn" role="switch" aria-checked={isOn(b.key)} aria-label="{b.label} on/off"
@@ -60,6 +72,7 @@
       </div>
     {/each}
   </nav>
+  </div>
 
   <section class="panel">
     <header class="row phead">
@@ -114,7 +127,15 @@
 
 <style>
   .editor { display: flex; flex-direction: column; height: 100%; gap: 12px; padding: 12px 16px 16px; }
-  .chain { display: flex; gap: 8px; padding-bottom: 4px; flex: none; scrollbar-width: thin; }
+  .chain-row { display: flex; gap: 8px; flex: none; min-width: 0; }
+  .chain { display: flex; gap: 8px; padding-bottom: 4px; flex: 1; min-width: 0; scrollbar-width: thin; }
+  .show-off { flex: none; height: 68px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 6px; padding: 6px 10px; text-align: left; }
+  .so-txt { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; line-height: 1.2; }
+  .so-txt small { font-size: 12px; font-weight: 400; color: var(--dim); }
+  .show-off .lever { width: 40px; height: 22px; border-radius: 11px; background: var(--line); position: relative; transition: background 0.15s; }
+  .show-off .lever::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--dim); transition: transform 0.15s, background 0.15s; }
+  .show-off.on .lever { background: var(--accent-dim); }
+  .show-off.on .lever::after { transform: translateX(18px); background: var(--accent); }
   .tile { flex: none; min-width: 96px; max-width: 170px; height: 68px; display: flex; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); overflow: hidden; }
   .tile.sel { border-color: var(--accent); background: #2c2518; }
   .led-btn { width: 30px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: #0002; flex: none; }
