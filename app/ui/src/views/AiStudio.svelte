@@ -179,11 +179,13 @@
     {#if !ai.loaded}
       <div class="grow"></div>
     {:else if !ai.ready}
-      <div class="setup">
-        <h2>Set up AI Studio</h2>
-        <p class="dim">AI Studio needs a language model. Pick one and enter its details.</p>
-        {@render settingsForm()}
-        <button class="primary big" onclick={() => ai.saveSettings(form, search, Object.values(drafts).filter((d) => d.provider !== form.provider))}>Save and start</button>
+      <div class="setup-wrap scroll">
+        <div class="setup">
+          <h2>Set up AI Studio</h2>
+          <p class="dim">AI Studio needs a language model. Pick one and enter its details.</p>
+          {@render settingsForm()}
+          <button class="primary big" onclick={() => ai.saveSettings(form, search, Object.values(drafts).filter((d) => d.provider !== form.provider))}>Save and start</button>
+        </div>
       </div>
     {:else}
       <div class="log scroll" bind:this={log}>
@@ -282,7 +284,9 @@
   .tname { font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { font-size: 13px; padding: 2px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
-  .setup { margin: auto; width: min(620px, 100%); display: flex; flex-direction: column; gap: 12px; }
+  /* The form is taller than the screen with the model list open: scroll it, centred when it fits. */
+  .setup-wrap { flex: 1; min-height: 0; display: flex; padding-right: 4px; }
+  .setup { margin: auto; width: min(620px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; }
   .setup h2 { margin: 0; }
   .provs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .modelrow { gap: 10px; }
