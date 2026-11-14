@@ -131,7 +131,7 @@
   </div>
   {#if provider.needsBaseUrl}
     <label class="field"><span class="dim">Server URL</span>
-      <input type="text" placeholder="http://dev-box:1234/v1" bind:value={form.baseUrl} /></label>
+      <input type="text" placeholder="http://localhost:1234/v1" bind:value={form.baseUrl} /></label>
   {/if}
   <label class="field"><span class="dim">API key{provider.needsKey ? '' : ' (if the server needs one)'}</span>
     <input type="password" placeholder={provider.id === 'anthropic' ? 'sk-ant-…' : ''} bind:value={form.apiKey} autocomplete="off" /></label>

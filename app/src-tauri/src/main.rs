@@ -281,8 +281,25 @@ fn set_deltas(state: State<AppState>, deltas: HashMap<String, i64>) {
 
 fn data_dir(app: &AppHandle) -> CmdResult<PathBuf> {
     let dir = app.path().app_data_dir().map_err(err)?;
+    if !dir.exists() {
+        adopt_old_data_dir(&dir);
+    }
     fs::create_dir_all(dir.join("tones")).map_err(err)?;
     Ok(dir)
+}
+
+/// Older builds used a different app identifier, so their data sits in a sibling folder named
+/// `<something>.katana-studio`. Move it to the current location on first run.
+fn adopt_old_data_dir(dir: &std::path::Path) {
+    let (Some(parent), Some(name)) = (dir.parent(), dir.file_name()) else { return };
+    let Ok(entries) = fs::read_dir(parent) else { return };
+    for e in entries.flatten() {
+        let n = e.file_name();
+        if n != name && n.to_string_lossy().ends_with(".katana-studio") && e.path().join("tones").is_dir() {
+            let _ = fs::rename(e.path(), dir);
+            return;
+        }
+    }
 }
 
 fn safe_name(s: &str) -> CmdResult<&str> {
