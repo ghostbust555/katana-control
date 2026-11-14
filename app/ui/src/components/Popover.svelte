@@ -1,7 +1,7 @@
 <script lang="ts">
   // Floating panel shown where the user pressed. It stays open while you use it and closes
-  // only when you tap outside it (or press Escape). The tap outside is swallowed, so it
-  // doesn't also press whatever is underneath.
+  // only when you tap outside it (or press Escape). The tap outside only closes it: it never
+  // also presses whatever is underneath.
   import type { Snippet } from 'svelte'
 
   let { at, onclose, width = 360, children }: {
@@ -24,20 +24,38 @@
     const above = at.y - GAP - h
     return above >= M ? above : Math.max(M, window.innerHeight - h - M)
   })
+
+  // A tap outside hides the popover at once, but the scrim stays until that tap's click has
+  // arrived and been swallowed. Removing it on pointerdown let the click fall through to
+  // whatever was underneath.
+  let closing = $state(false)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  function finish() {
+    clearTimeout(timer)
+    onclose()
+  }
+  /** In case no click follows (the finger slid or the touch was cancelled). */
+  function finishSoon() {
+    clearTimeout(timer)
+    timer = setTimeout(finish, 400)
+  }
+  $effect(() => () => clearTimeout(timer))
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
-<div class="scrim" role="presentation"
-  onpointerdown={(e) => { e.preventDefault(); e.stopPropagation(); onclose() }}
-  onclick={(e) => e.stopPropagation()}></div>
+<div class="scrim" class:closing role="presentation"
+  onpointerdown={(e) => { e.preventDefault(); e.stopPropagation(); closing = true }}
+  onpointerup={finishSoon} onpointercancel={finishSoon}
+  onclick={(e) => { e.preventDefault(); e.stopPropagation(); finish() }}></div>
 <div class="pop" role="dialog" tabindex="-1" bind:clientWidth={w} bind:clientHeight={h}
-  style="left:{left}px; top:{top}px; width:min({width}px, calc(100vw - 16px)); visibility:{w ? 'visible' : 'hidden'}">
+  style="left:{left}px; top:{top}px; width:min({width}px, calc(100vw - 16px)); visibility:{w && !closing ? 'visible' : 'hidden'}">
   {@render children()}
 </div>
 
 <style>
   .scrim { position: fixed; inset: 0; z-index: 70; background: #0005; }
+  .scrim.closing { background: transparent; }
   .pop {
     position: fixed; z-index: 71; max-height: calc(100vh - 16px); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; overscroll-behavior-x: none; touch-action: pan-y;
     background: var(--panel); border: 1px solid #4a505b; border-radius: 16px; padding: 16px;
