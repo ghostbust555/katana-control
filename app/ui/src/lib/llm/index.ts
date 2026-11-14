@@ -5,5 +5,5 @@ import type { LlmProvider } from './types'
 
 export * from './types'
 
-export const providers: LlmProvider[] = [anthropic, openrouter, openai]
-export const providerById = (id: string) => providers.find((p) => p.id === id) ?? anthropic
+export const providers: LlmProvider[] = [openrouter, anthropic, openai]
+export const providerById = (id: string) => providers.find((p) => p.id === id) ?? openrouter

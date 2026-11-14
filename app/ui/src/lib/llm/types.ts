@@ -53,6 +53,8 @@ export interface ModelInfo {
   name: string
   /** Price, context size, ... */
   detail?: string
+  /** Costs nothing to use (OpenRouter's :free models). */
+  free?: boolean
 }
 
 export interface LlmProvider {

@@ -214,7 +214,7 @@ class AiStudio {
   entries = $state<ChatEntry[]>([])
   busy = $state(false)
   status = $state('')
-  private stored = $state<Stored>({ provider: 'anthropic', byProvider: {} })
+  private stored = $state<Stored>({ provider: 'openrouter', byProvider: {} })
   loaded = $state(false)
   private session: ChatSession | null = null
   private abort: AbortController | null = null
@@ -230,7 +230,7 @@ class AiStudio {
   async init() {
     if (this.loaded) return
     const doc = await backend.loadDoc<Partial<Stored> & Partial<LlmSettings>>('ai')
-    if (doc?.byProvider) this.stored = { provider: doc.provider ?? 'anthropic', byProvider: doc.byProvider }
+    if (doc?.byProvider) this.stored = { provider: doc.provider ?? 'openrouter', byProvider: doc.byProvider }
     else if (doc?.provider) { // first version stored one flat settings object
       const { provider, apiKey = '', model = '', baseUrl = '' } = doc
       this.stored = { provider, byProvider: { [provider]: { apiKey, model, baseUrl } } }

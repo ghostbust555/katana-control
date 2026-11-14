@@ -124,9 +124,13 @@ async function listModels(o: Options, s: LlmSettings): Promise<ModelInfo[]> {
     .map((m) => ({
       id: m.id,
       name: m.name ?? m.id,
-      detail: m.pricing
-        ? `${perM(m.pricing.prompt)} in / ${perM(m.pricing.completion)} out per 1M tokens${m.context_length ? ` · ${Math.round(m.context_length / 1000)}k context` : ''}`
-        : undefined,
+      free: !!m.pricing && Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0,
+      ctx: m.context_length ? ` · ${Math.round(m.context_length / 1000)}k context` : '',
+      pricing: m.pricing,
+    }))
+    .map(({ ctx, pricing, ...m }) => ({
+      ...m,
+      detail: pricing ? (m.free ? 'Free' : `${perM(pricing.prompt)} in / ${perM(pricing.completion)} out per 1M tokens`) + ctx : undefined,
     }))
 }
 
@@ -142,7 +146,7 @@ export const openrouter = openAiCompatible({
   id: 'openrouter',
   label: 'OpenRouter',
   baseUrl: 'https://openrouter.ai/api/v1',
-  defaultModel: 'anthropic/claude-opus-5.5',
+  defaultModel: 'deepseek/deepseek-v4.1-flash-1017',
   needsKey: true,
   hint: 'Get a key at openrouter.ai/keys. It is stored only on this device. Only models that can call tools are listed.',
   headers: { 'X-Title': 'Katana Studio' },

@@ -14,16 +14,18 @@
   let log: HTMLDivElement | undefined = $state()
   let input: HTMLTextAreaElement | undefined = $state()
   let settingsAt = $state<Point | null>(null)
-  let form = $state<LlmSettings>({ provider: 'anthropic', apiKey: '', model: '', baseUrl: '' })
+  let form = $state<LlmSettings>({ provider: 'openrouter', apiKey: '', model: '', baseUrl: '' })
   let open = $state<Record<number, boolean>>({})
   // Settings form: per-provider edits survive switching back and forth before saving.
   let drafts: Record<string, LlmSettings> = {}
   let models = $state<ModelInfo[] | null>(null)
   let modelsMsg = $state('')
   let modelQuery = $state('')
+  let freeOnly = $state(false)
+  const freeCount = $derived((models ?? []).filter((m) => m.free).length)
   const shownModels = $derived.by(() => {
     const q = modelQuery.trim().toLowerCase()
-    return (models ?? []).filter((m) => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)).slice(0, 150)
+    return (models ?? []).filter((m) => (!freeOnly || m.free) && (!q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))).slice(0, 150)
   })
 
   function pickProvider(id: string) {
@@ -128,7 +130,12 @@
   </div>
   {#if modelsMsg}<p class="dim small">{modelsMsg}</p>{/if}
   {#if models}
-    <input type="search" placeholder="Search {models.length} models (e.g. claude, gpt, gemini, free)" bind:value={modelQuery} />
+    <div class="row modelrow">
+      <input type="search" placeholder="Search {freeOnly ? freeCount + ' free' : models.length} models (e.g. claude, gpt, gemini)" bind:value={modelQuery} />
+      {#if freeCount}
+        <button class:sel={freeOnly} aria-pressed={freeOnly} onclick={() => (freeOnly = !freeOnly)}>Free only</button>
+      {/if}
+    </div>
     <div class="models scroll">
       {#each shownModels as m (m.id)}
         <button class="model" class:sel={form.model === m.id} onclick={() => pickModel(m)}>
@@ -251,6 +258,7 @@
   .modelrow { gap: 10px; }
   .modelrow input { flex: 1; min-width: 0; }
   .modelrow button { min-height: 56px; flex: none; }
+  .modelrow button.sel { background: var(--accent-dim); border-color: var(--accent); }
   .models { max-height: 300px; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
   .model { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 60px; padding: 8px 14px; text-align: left; flex: none; width: 100%; white-space: normal; }
   .model span { overflow-wrap: anywhere; }
