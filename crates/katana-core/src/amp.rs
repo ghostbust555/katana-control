@@ -23,8 +23,16 @@ pub fn find_port<T: midir::MidiIO>(io: &T, needle: &str) -> Result<T::Port> {
 pub fn port_names() -> Result<(Vec<String>, Vec<String>)> {
     let i = MidiInput::new("katana-control")?;
     let o = MidiOutput::new("katana-control")?;
-    let ins = i.ports().iter().filter_map(|p| i.port_name(p).ok()).collect();
-    let outs = o.ports().iter().filter_map(|p| o.port_name(p).ok()).collect();
+    let ins = i
+        .ports()
+        .iter()
+        .filter_map(|p| i.port_name(p).ok())
+        .collect();
+    let outs = o
+        .ports()
+        .iter()
+        .filter_map(|p| o.port_name(p).ok())
+        .collect();
     Ok((ins, outs))
 }
 
@@ -36,17 +44,27 @@ pub struct Connection {
 
 impl Connection {
     pub fn open(port: &str) -> Result<Connection> {
+        let (tx, rx) = mpsc::channel();
+        Self::open_with(port, rx, move |msg| {
+            let _ = tx.send(msg);
+        })
+    }
+
+    /// Open with a custom handler for incoming messages; `rx` is stored for callers that
+    /// still want `recv_timeout` (pass a dummy receiver otherwise).
+    pub fn open_with(
+        port: &str,
+        rx: mpsc::Receiver<Vec<u8>>,
+        on_message: impl Fn(Vec<u8>) + Send + 'static,
+    ) -> Result<Connection> {
         let mut input = MidiInput::new("katana-control-in")?;
         input.ignore(Ignore::None); // keep SysEx
         let in_port = find_port(&input, port)?;
-        let (tx, rx) = mpsc::channel();
         let _in = input
             .connect(
                 &in_port,
                 "katana-in",
-                move |_, msg, _| {
-                    let _ = tx.send(msg.to_vec());
-                },
+                move |_, msg, _| on_message(msg.to_vec()),
                 (),
             )
             .map_err(|e| anyhow!("opening MIDI input: {e} (is Tone Studio still running?)"))?;

@@ -5,3 +5,4 @@ pub mod amp;
 pub mod capture;
 pub mod roland;
 pub mod schema;
+pub mod session;

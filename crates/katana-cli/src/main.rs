@@ -121,7 +121,9 @@ struct Amp {
 
 impl Amp {
     fn open(port: &str) -> Result<Amp> {
-        Ok(Amp { conn: amp::Connection::open(port)? })
+        Ok(Amp {
+            conn: amp::Connection::open(port)?,
+        })
     }
 
     fn send(&mut self, msg: &[u8]) -> Result<()> {

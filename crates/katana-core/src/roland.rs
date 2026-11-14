@@ -183,7 +183,10 @@ mod tests {
     #[test]
     fn edit_mode_on_matches_known_mk2_message() {
         // F0 41 00 00 00 00 33 12 7F 00 00 01 01 7F F7 (documented by TuxKatana for the MkII)
-        let mk2 = Target { device_id: 0x00, model_id: vec![0x00, 0x00, 0x00, 0x33] };
+        let mk2 = Target {
+            device_id: 0x00,
+            model_id: vec![0x00, 0x00, 0x00, 0x33],
+        };
         let m = dt1(&mk2, [0x7F, 0, 0, 1], &[1]);
         assert_eq!(hex(&m), "F0 41 00 00 00 00 33 12 7F 00 00 01 01 7F F7");
     }
