@@ -15,4 +15,6 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 katana-core.workspace = true
-tauri = { version = "2", features = [] }
+# custom-protocol: serve the bundled UI from the exe (the tauri CLI adds it for release builds;
+# we build with cargo directly, so enable it here).
+tauri = { version = "2", features = ["custom-protocol"] }
