@@ -48,6 +48,8 @@ enum Cmd {
     Read { addr: String, size: u32 },
     /// DT1: write bytes at ADDR (e.g. "60 00 06 51" "40")
     Write { addr: String, data: String },
+    /// Find the device/model id the amp answers to: sends read-only RQ1 requests with likely ids
+    Probe,
     /// Decode MIDI from a USBPcap/usbmon capture (.pcapng/.pcap) of Tone Studio talking to the amp
     Decode {
         capture: PathBuf,
@@ -186,6 +188,7 @@ impl Cmd {
             Cmd::Read { .. } => "read",
             Cmd::Write { .. } => "write",
             Cmd::Decode { .. } => "decode",
+            Cmd::Probe => "probe",
         }
     }
 }
@@ -261,6 +264,54 @@ fn run(cli: &Cli) -> Result<()> {
             let mut amp = Amp::open(&cli.port)?;
             amp.send(&roland::dt1(&t, parse_addr(addr)?, &parse_hex(data)?))?;
             amp.drain(Duration::from_millis(300), ml);
+        }
+        Cmd::Probe => {
+            let mut amp = Amp::open(&cli.port)?;
+            // Identity reply on a Gen 3: device 10, family 07 05 (MkII: 00, 33).
+            let devices = [0x10u8, 0x00, 0x7F];
+            let models: [&[u8]; 8] = [
+                &[0x00, 0x00, 0x07, 0x05],
+                &[0x00, 0x00, 0x05, 0x07],
+                &[0x00, 0x00, 0x00, 0x07],
+                &[0x00, 0x00, 0x00, 0x05],
+                &[0x00, 0x00, 0x00, 0x33],
+                &[0x00, 0x00, 0x00, 0x75],
+                &[0x00, 0x07, 0x05],
+                &[0x07, 0x05],
+            ];
+            // Read-only requests at addresses that exist on other Roland/BOSS units.
+            let reads: [([u8; 4], u32); 4] = [
+                ([0x7F, 0x00, 0x00, 0x00], 2),
+                ([0x10, 0x00, 0x00, 0x00], 16),
+                ([0x60, 0x00, 0x00, 0x00], 16),
+                ([0x00, 0x00, 0x00, 0x00], 16),
+            ];
+            let mut hits = Vec::new();
+            for &dev in &devices {
+                for model in models {
+                    let t = Target { device_id: dev, model_id: model.to_vec() };
+                    for (addr, size) in reads {
+                        amp.send(&roland::rq1(&t, addr, size))?;
+                        let got = amp.drain(Duration::from_millis(250), model.len());
+                        if !got.is_empty() {
+                            hits.push(format!(
+                                "device {:02X}  model {}  addr {}",
+                                dev,
+                                hex(model),
+                                hex(&addr)
+                            ));
+                        }
+                    }
+                }
+            }
+            out!("");
+            if hits.is_empty() {
+                out!("PROBE: no replies to any RQ1 combination");
+            } else {
+                for h in hits {
+                    out!("PROBE HIT: {h}");
+                }
+            }
         }
         Cmd::Decode { capture, summary } => {
             let events = capture::read_midi_events(capture)?;
