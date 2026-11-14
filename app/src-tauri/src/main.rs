@@ -98,6 +98,7 @@ fn to_amp(state: &AppState, values: BTreeMap<String, Value>) -> BTreeMap<String,
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum AmpEvent {
     Param { id: String, value: Value },
+    PatchSelected { number: u16 },
     Disconnected { reason: String },
 }
 
@@ -118,6 +119,10 @@ fn connect(app: AppHandle, state: State<AppState>, port: Option<String>) -> CmdR
                 let d = st.deltas.lock().unwrap();
                 let v = with_delta(&d, &id, &value, -1);
                 AmpEvent::Param { id, value: v }
+            }
+            Event::PatchSelected { number } => {
+                log(&format!("amp selected patch {number}"));
+                AmpEvent::PatchSelected { number }
             }
             Event::Disconnected { reason } => {
                 log(&format!("amp disconnected: {reason}"));

@@ -82,6 +82,13 @@ class Store {
   assignments = $state<Record<string, string | null>>(Object.fromEntries(channels.map((c) => [c.key, null])))
 
   amp = $state({ connected: false, port: '', busy: '' })
+  /** True while the editor tone is known to be what the amp is playing (edits flow both ways).
+   *  Goes false when the amp switches channel or something else is put on the amp. */
+  synced = $state(false)
+  /** Patch the amp last reported switching to (0 = panel, 1-4 = A1-A4, 5-8 = B1-B4). */
+  ampPatch = $state<number | null>(null)
+  /** Our own channel writes make the amp report a patch change; ignore those until this time. */
+  private ignorePatchUntil = 0
   toasts = $state<Toast[]>([])
   confirm = $state<Confirm | null>(null)
   ask = $state<Ask | null>(null)
@@ -97,8 +104,13 @@ class Store {
     log(`UI build ${__BUILD__}`)
     backend.onAmpEvent((e) => {
       if (e.kind === 'param') this.setParam(e.id, e.value, { fromAmp: true })
-      else {
+      else if (e.kind === 'patchSelected') {
+        if (this.amp.busy || Date.now() < this.ignorePatchUntil) return
+        this.ampPatch = e.number
+        this.synced = false
+      } else {
         this.amp.connected = false
+        this.synced = false
         this.toast(`Amp disconnected: ${e.reason}`, 'error')
       }
     })
@@ -156,7 +168,12 @@ class Store {
   }
 
   private send(values: Values) {
-    if (this.amp.connected) backend.setParams(values).catch((e) => this.toast(String(e), 'error'))
+    if (this.amp.connected) {
+      backend.setParams(values).catch((e) => {
+        this.synced = false
+        this.toast(String(e), 'error')
+      })
+    }
   }
 
   undo() {
@@ -182,6 +199,7 @@ class Store {
     this.tone = copy
     this.saved = JSON.stringify(copy.params)
     this.inLibrary = fromLibrary
+    this.synced = false
     this.undoStack = []
     this.redoStack = []
     if (fromLibrary) backend.saveDoc('session', { toneId: t.id })
@@ -191,7 +209,7 @@ class Store {
     const go = () => {
       this.load(t, true)
       this.view = 'editor'
-      if (this.amp.connected) this.busy('Sending tone to amp…', () => backend.writePatch(this.tone.params))
+      if (this.amp.connected) this.sendToAmp()
     }
     if (this.dirty && t.id !== this.tone.id) this.askDiscard(go)
     else go()
@@ -200,15 +218,15 @@ class Store {
   newTone() {
     this.askDiscard(() => {
       this.load(newTone(), false)
-      if (this.amp.connected) this.busy('Sending tone to amp…', () => backend.writePatch(this.tone.params))
+      if (this.amp.connected) this.sendToAmp()
     })
   }
 
   revert() {
     const t = this.tones.find((t) => t.id === this.tone.id)
-    if (t) this.open(t)
-    else this.load(newTone(), false)
-    if (this.amp.connected) this.busy('Sending tone to amp…', () => backend.writePatch(this.tone.params))
+    if (t) return this.open(t) // open() sends it
+    this.load(newTone(), false)
+    if (this.amp.connected) this.sendToAmp()
   }
 
   private askDiscard(go: () => void) {
@@ -291,6 +309,9 @@ class Store {
       this.amp.busy = ''
     }
     // The editor is left as it is; Load from amp / Send to amp are explicit toolbar buttons.
+    // It counts as synced only if the amp happens to be playing the same sound already.
+    const cur = await this.busy('Reading the amp…', () => backend.readPatch())
+    this.synced = !!cur && sameParams(cur, this.tone.params)
     await this.loadChannelsFromAmp()
   }
 
@@ -320,22 +341,33 @@ class Store {
   async disconnect() {
     await backend.disconnect()
     this.amp.connected = false
+    this.synced = false
   }
 
   pullFromAmp() {
     return this.busy('Reading the amp…', async () => {
       const v = await backend.readPatch()
       const name = String(v['com.name'] ?? '').trim() || 'From amp'
-      this.askDiscard(() => this.load(newTone(name, v), false))
+      this.askDiscard(() => {
+        this.load(newTone(name, v), false)
+        this.synced = true
+        this.ampPatch = null
+      })
     })
   }
 
-  sendToAmp() {
-    return this.busy('Sending tone to amp…', () => backend.writePatch(this.tone.params))
+  async sendToAmp() {
+    const ok = await this.busy('Sending tone to amp…', async () => (await backend.writePatch(this.tone.params), true))
+    if (ok) {
+      this.synced = true
+      this.ampPatch = null
+    }
   }
 
-  audition(t: Tone) {
-    return this.busy(`Playing "${t.name}" on the amp…`, () => backend.writePatch({ ...defaults(), ...t.params }))
+  async audition(t: Tone) {
+    const v = { ...defaults(), ...t.params }
+    const ok = await this.busy(`Playing "${t.name}" on the amp…`, async () => (await backend.writePatch(v), true))
+    if (ok) this.synced = sameParams(v, this.tone.params)
   }
 
   assign(channel: string, toneId: string | null) {
@@ -347,10 +379,14 @@ class Store {
     const ch = channels.find((c) => c.key === key)!
     const t = this.tones.find((t) => t.id === this.assignments[key])
     if (!t) return this.toast(`No tone assigned to ${key}`, 'error')
+    // Writing a channel goes through the amp's current patch, so the amp ends up playing it.
+    const v = { ...defaults(), ...t.params }
     await this.busy(`Writing "${t.name}" to ${key}…`, async () => {
-      await backend.writeChannel(ch.patch, { ...defaults(), ...t.params })
+      await backend.writeChannel(ch.patch, v)
       this.toast(`${key} ← "${t.name}"`)
     })
+    this.ignorePatchUntil = Date.now() + 1500
+    this.synced = sameParams(v, this.tone.params)
   }
 
   async writeAllChannels() {
@@ -437,3 +473,9 @@ class Store {
 
 export const store = new Store()
 export { writable }
+
+/** Same sound: equal on every writable param (names compared without trailing padding). */
+function sameParams(a: Values, b: Values) {
+  const norm = (v: Value | undefined) => (typeof v === 'string' ? v.trimEnd() : v)
+  return writable.every((p) => norm(a[p.id]) === norm(b[p.id]))
+}

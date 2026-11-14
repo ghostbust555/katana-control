@@ -28,6 +28,11 @@ pub enum Event {
         id: String,
         value: Value,
     },
+    /// The amp switched to stored patch n (0 = PANEL, 1-4 = A1-A4, 5-8 = B1-B4), e.g. its
+    /// channel buttons were pressed. The current patch now holds that patch's sound.
+    PatchSelected {
+        number: u16,
+    },
     Disconnected {
         reason: String,
     },
@@ -323,6 +328,12 @@ impl Worker {
             return;
         };
         let lin = from_7bit(&addr);
+        // Tone Studio's CURRENT_PATCH_NUMBER (INTEGER2x7): sent when the amp changes patch.
+        if lin == 0 && data.len() >= 2 {
+            let number = (u16::from(data[0]) << 7) | u16::from(data[1]);
+            (self.on_event)(Event::PatchSelected { number });
+            return;
+        }
         if lin < PATCH_BASE {
             return;
         }

@@ -5,7 +5,10 @@ import { listen } from '@tauri-apps/api/event'
 import { defaults, type Value } from './schema'
 
 export type Values = Record<string, Value>
-export type AmpEvent = { kind: 'param'; id: string; value: Value } | { kind: 'disconnected'; reason: string }
+export type AmpEvent =
+  | { kind: 'param'; id: string; value: Value }
+  | { kind: 'patchSelected'; number: number }
+  | { kind: 'disconnected'; reason: string }
 
 export interface Backend {
   listPorts(): Promise<string[]>
@@ -97,7 +100,8 @@ function mockBackend(): Backend {
       return s ? (JSON.parse(s) as T) : null
     },
     saveDoc: async (name, value) => localStorage.setItem(LS + name, JSON.stringify(value)),
-    onAmpEvent: () => {},
+    // Dev hook: window.__ampEvent({ kind: 'patchSelected', number: 5 }) simulates the amp.
+    onAmpEvent: (cb) => void ((window as unknown as Record<string, unknown>).__ampEvent = cb),
   }
 }
 

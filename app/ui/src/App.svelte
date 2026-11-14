@@ -16,6 +16,26 @@
 
   let guitarMenu = $state(false)
 
+  const PATCH_NAMES = ['Panel', 'A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4']
+  function syncInfo() {
+    if (store.synced) {
+      store.toast('Live: the editor is what the amp is playing. Changes on either one apply to the other.')
+      return
+    }
+    const p = store.ampPatch !== null ? PATCH_NAMES[store.ampPatch] ?? `patch ${store.ampPatch}` : null
+    store.confirm = {
+      title: 'Editor and amp differ',
+      body: p
+        ? `The amp switched to ${p}, so it no longer plays the editor tone. Load ${p} into the editor, or send the editor tone back to the amp.`
+        : 'The amp may be playing a different sound than the editor shows. Load the amp\'s sound into the editor, or send the editor tone to the amp.',
+      actions: [
+        { label: 'Cancel', run: () => {} },
+        { label: '↓ Load from amp', run: () => store.pullFromAmp() },
+        { label: '↑ Send to amp', primary: true, run: () => store.sendToAmp() },
+      ],
+    }
+  }
+
   function saveAs() {
     store.ask = { title: 'Save as a new tone', value: `${store.tone.name} 2`, okLabel: 'Save', onsubmit: (v) => v.trim() && store.save(v.trim()) }
   }
@@ -80,6 +100,20 @@
         aria-label="Send to amp" disabled={!store.amp.connected || !!store.amp.busy} onclick={() => store.sendToAmp()}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V7M6 13l6-6 6 6M5 3h14" /></svg>
       </button>
+
+      {#if store.amp.connected}
+        <button class="sync" class:live={store.synced} onclick={syncInfo}
+          title={store.synced ? 'Live: editor and amp are in sync' : 'Not synced: the amp is playing something else'}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {#if store.synced}
+              <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
+            {:else}
+              <path d="M9 15l-1 1a3.5 3.5 0 0 1-5-5l1-1M15 9l1-1a3.5 3.5 0 0 1 5 5l-1 1M8 3v3M3 8h3M16 21v-3M21 16h-3" />
+            {/if}
+          </svg>
+          <span>{store.synced ? 'Live' : store.ampPatch !== null ? `Amp on ${PATCH_NAMES[store.ampPatch] ?? store.ampPatch}` : 'Not synced'}</span>
+        </button>
+      {/if}
 
       <span class="grow"></span>
       {#if store.amp.busy}<span class="busy"><span class="spin"></span>{store.amp.busy}</span>{/if}
@@ -161,6 +195,10 @@
   .icon { width: var(--tap); padding: 0; font-size: 22px; }
   .arrow { display: grid; place-items: center; }
   .arrow svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sync { display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--warn, #e8a33d); border-color: color-mix(in srgb, currentColor 45%, transparent); }
+  .sync.live { color: var(--ok); }
+  .sync svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sync span { font-weight: 600; white-space: nowrap; }
   .menu { position: relative; }
   .menu summary { list-style: none; min-height: var(--tap); display: flex; align-items: center; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); cursor: pointer; }
   .menu summary::-webkit-details-marker { display: none; }
